@@ -1,5 +1,3 @@
-# Agent Workflow
-
 This repo is driven by the spec docs in `spec/`. When asked to do any task from `spec/tasks.md` (e.g. “do task 1.1”), follow this workflow every time.
 
 ## Workflow
