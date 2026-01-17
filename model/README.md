@@ -19,8 +19,9 @@ ROBOFLOW_API_KEY=your_key uv run dataset/get.py
 
 This will:
 1. Download the dataset from Roboflow
-2. Organize it into `data/images/train`, `data/images/val`, `data/labels/train`, `data/labels/val`
-3. Create `data/data.yaml` configuration file
+2. Organize training/validation data into `data/images/train`, `data/images/val`, `data/labels/train`, `data/labels/val`
+3. Save test data separately to `test_data/images`, `test_data/labels` (for final evaluation)
+4. Create `data/data.yaml` configuration file
 
 ## Training
 
@@ -37,6 +38,23 @@ Options:
 - `--name`: Training run name (default: fish_disease)
 
 Results are saved to `runs/detect/fish_disease/`.
+
+## Final Evaluation
+
+After training, evaluate the model on the held-out test set to get unbiased performance metrics:
+
+```bash
+uv run evaluate.py --weights runs/detect/fish_disease/weights/best.pt
+```
+
+Options:
+- `--weights`: Path to trained weights (.pt or .tflite)
+- `--test-dir`: Path to test data directory (default: test_data)
+- `--imgsz`: Input image size (default: 640)
+- `--confidence`: Confidence threshold (default: 0.001)
+- `--iou`: IoU threshold for NMS (default: 0.6)
+
+This reports mAP@50, mAP@50-95, precision, recall, and per-class AP on data the model has never seen during training or validation.
 
 ## Export to TFLite
 
@@ -103,6 +121,9 @@ model/
 │   │   ├── train/
 │   │   └── val/
 │   └── data.yaml
+├── test_data/
+│   ├── images/
+│   └── labels/
 ├── runs/
 │   └── detect/
 │       └── fish_disease/
@@ -114,6 +135,7 @@ model/
 │   ├── test_inference.py
 │   └── test_training.py
 ├── train.py
+├── evaluate.py
 ├── export_model.py
 └── test_inference.py
 ```

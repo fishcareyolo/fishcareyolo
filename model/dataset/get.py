@@ -40,7 +40,7 @@ def download_dataset(
     return dataset
 
 
-def organize_dataset(source_dir: Path, target_dir: Path) -> None:
+def organize_dataset(source_dir: Path, target_dir: Path, test_dir: Path) -> None:
     """
     Organize downloaded dataset into the expected structure.
 
@@ -61,6 +61,10 @@ def organize_dataset(source_dir: Path, target_dir: Path) -> None:
             labels/train/
             labels/val/
             data.yaml
+
+        test_dir/ (separate, for final evaluation only)
+            images/
+            labels/
     """
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -94,15 +98,33 @@ def organize_dataset(source_dir: Path, target_dir: Path) -> None:
         for lbl in src_valid_labels.glob("*"):
             shutil.copy2(lbl, target_dir / "labels" / "val" / lbl.name)
 
+    # Copy test images and labels to separate directory (for final evaluation)
+    test_dir.mkdir(parents=True, exist_ok=True)
+    (test_dir / "images").mkdir(parents=True, exist_ok=True)
+    (test_dir / "labels").mkdir(parents=True, exist_ok=True)
+
+    src_test_images = source_dir / "test" / "images"
+    src_test_labels = source_dir / "test" / "labels"
+
+    if src_test_images.exists():
+        for img in src_test_images.glob("*"):
+            shutil.copy2(img, test_dir / "images" / img.name)
+
+    if src_test_labels.exists():
+        for lbl in src_test_labels.glob("*"):
+            shutil.copy2(lbl, test_dir / "labels" / lbl.name)
+
     # Create data.yaml with correct paths
     create_data_yaml(target_dir)
 
     # Print summary
     train_count = len(list((target_dir / "images" / "train").glob("*")))
     val_count = len(list((target_dir / "images" / "val").glob("*")))
+    test_count = len(list((test_dir / "images").glob("*")))
     print(f"\nDataset organized successfully!")
     print(f"  Training images: {train_count}")
     print(f"  Validation images: {val_count}")
+    print(f"  Test images: {test_count} (in {test_dir})")
     print(f"  Classes: {DISEASE_CLASSES}")
 
 
@@ -157,9 +179,11 @@ def main():
     # Organize into our expected structure
     model_dir = Path(__file__).parent.parent
     target_dir = model_dir / "data"
+    test_dir = model_dir / "test_data"
 
     print(f"\nOrganizing dataset to: {target_dir}")
-    organize_dataset(source_dir, target_dir)
+    print(f"Test data will be saved to: {test_dir}")
+    organize_dataset(source_dir, target_dir, test_dir)
 
     # clean up the original download
     shutil.rmtree(source_dir)
