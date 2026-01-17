@@ -14,7 +14,7 @@ uv sync
 Download the fish disease dataset from Roboflow:
 
 ```bash
-ROBOFLOW_API_KEY=your_key python dataset/get.py
+ROBOFLOW_API_KEY=your_key uv run dataset/get.py
 ```
 
 This will:
@@ -27,7 +27,7 @@ This will:
 Train the YOLOv8n model:
 
 ```bash
-python train.py --epochs 100 --batch 16
+uv run train.py --epochs 100 --batch 16
 ```
 
 Options:
@@ -43,7 +43,7 @@ Results are saved to `runs/detect/fish_disease/`.
 Export the trained model to TFLite format for mobile deployment:
 
 ```bash
-python export_model.py --weights runs/detect/fish_disease/weights/best.pt
+uv run export_model.py --weights runs/detect/fish_disease/weights/best.pt
 ```
 
 Options:
@@ -58,8 +58,8 @@ The TFLite model is saved alongside the weights.
 ### Test inference on images:
 
 ```bash
-python test_inference.py --weights runs/detect/fish_disease/weights/best.tflite --dir data/images/val
-python test_inference.py --weights runs/detect/fish_disease/weights/best.tflite --image path/to/image.jpg
+uv run test_inference.py --weights runs/detect/fish_disease/weights/best.tflite --dir data/images/val
+uv run test_inference.py --weights runs/detect/fish_disease/weights/best.tflite --image path/to/image.jpg
 ```
 
 Options:
