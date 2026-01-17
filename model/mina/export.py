@@ -46,7 +46,7 @@ def export_tflite(
 
     # Export to TFLite
     # Note: nms=False by default because onnx2tf has issues with TopK operations
-    # used in YOLO NMS. NMS should be handled in the Flutter app instead.
+    # used in YOLO NMS. NMS should be handled in the mobile app instead.
     export_path = model.export(
         format="tflite",
         int8=int8,
