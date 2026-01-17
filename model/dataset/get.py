@@ -161,9 +161,8 @@ def main():
     print(f"\nOrganizing dataset to: {target_dir}")
     organize_dataset(source_dir, target_dir)
 
-    # Optionally clean up the original download
-    print(f"\nOriginal download preserved at: {source_dir}")
-    print("You can delete it manually if no longer needed.")
+    # clean up the original download
+    shutil.rmtree(source_dir)
 
 
 if __name__ == "__main__":
