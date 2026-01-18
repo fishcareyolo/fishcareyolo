@@ -183,3 +183,32 @@ The codebase follows a clean separation of concerns:
 - **`tests/`**: Property-based and unit tests
 
 All disease classes, thresholds, and paths are defined once in `mina/core/constants.py`.
+
+## Publishing Releases
+
+Use the publish script to upload model binaries to GitHub releases.
+
+```bash
+# Dev release (for testing)
+./scripts/publish-release.sh dev
+
+# Prod release (for app)
+./scripts/publish-release.sh prod
+```
+
+This uploads:
+- `best_full_integer_quant.tflite` - Int8 quantized (recommended for mobile, ~3MB)
+- `best_float16.tflite` - Float16 (~6MB)
+- `best.onnx` - ONNX model (~12MB)
+- `best.pt` - PyTorch weights (~6MB)
+- `metadata.yaml` - Model metadata
+
+### Downloading in Expo App
+
+```bash
+# Dev model (latest test build)
+curl -L -o model.tflite https://github.com/fishcareyolo/fishcareyolo/releases/download/dev/best_full_integer_quant.tflite
+
+# Prod model (stable release)
+curl -L -o model.tflite https://github.com/fishcareyolo/fishcareyolo/releases/download/prod/best_full_integer_quant.tflite
+```

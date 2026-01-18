@@ -3,22 +3,17 @@
 # Publish model binaries to GitHub releases
 #
 # Usage:
-#   ./scripts/publish-release.sh dev [version]   # Create dev release (e.g., dev-v1.0.0)
-#   ./scripts/publish-release.sh prod [version]  # Create prod release (e.g., v1.0.0)
-#
-# Examples:
-#   ./scripts/publish-release.sh dev 1.0.0
-#   ./scripts/publish-release.sh prod 1.0.0
+#   ./scripts/publish-release.sh dev    # Create/update dev release (prerelease)
+#   ./scripts/publish-release.sh prod   # Create/update prod release
 #
 
 set -e
 
 CHANNEL="${1:-}"
-VERSION="${2:-}"
 
 if [[ -z "$CHANNEL" ]]; then
     echo "Error: Channel required (dev or prod)"
-    echo "Usage: $0 <dev|prod> <version>"
+    echo "Usage: $0 <dev|prod>"
     exit 1
 fi
 
@@ -27,21 +22,15 @@ if [[ "$CHANNEL" != "dev" && "$CHANNEL" != "prod" ]]; then
     exit 1
 fi
 
-if [[ -z "$VERSION" ]]; then
-    echo "Error: Version required (e.g., 1.0.0)"
-    echo "Usage: $0 <dev|prod> <version>"
-    exit 1
-fi
-
 # Set tag based on channel
 if [[ "$CHANNEL" == "dev" ]]; then
-    TAG="dev-v${VERSION}"
+    TAG="dev"
     PRERELEASE="--prerelease"
-    TITLE="Dev Release v${VERSION}"
+    TITLE="Dev Release"
 else
-    TAG="v${VERSION}"
+    TAG="prod"
     PRERELEASE=""
-    TITLE="Release v${VERSION}"
+    TITLE="Production Release"
 fi
 
 # Paths
@@ -78,18 +67,9 @@ done
 
 # Check if release already exists
 if gh release view "$TAG" &>/dev/null; then
-    echo ""
-    echo "Release $TAG already exists."
-    read -p "Delete and recreate? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Deleting existing release..."
-        gh release delete "$TAG" --yes
-        git push --delete origin "$TAG" 2>/dev/null || true
-    else
-        echo "Aborted."
-        exit 1
-    fi
+    echo "Release $TAG exists, deleting to update..."
+    gh release delete "$TAG" --yes
+    git push --delete origin "$TAG" 2>/dev/null || true
 fi
 
 # Create release notes
@@ -97,7 +77,7 @@ NOTES=$(cat <<EOF
 ## Fish Disease Detection Model
 
 **Channel:** ${CHANNEL}
-**Version:** ${VERSION}
+**Updated:** $(date -u +"%Y-%m-%d %H:%M UTC")
 
 ### Files
 
