@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button"
-import { Icon } from "@/components/ui/icon"
-import { Text } from "@/components/ui/text"
-import { useTheme } from "@/lib/theme-context"
 import { Link, Stack } from "expo-router"
 import { FishIcon, MoonStarIcon, StarIcon, SunIcon } from "lucide-react-native"
 import * as React from "react"
 import { View } from "react-native"
+import { Button } from "@/components/ui/button"
+import { Icon } from "@/components/ui/icon"
+import { Text } from "@/components/ui/text"
+import { useTheme } from "@/lib/theme"
 
 const SCREEN_OPTIONS = {
     title: "mina",
