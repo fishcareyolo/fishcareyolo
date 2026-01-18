@@ -11,9 +11,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     splash: {
-        image: "./assets/images/splash.png",
+        image: "./assets/images/icon.png",
         resizeMode: "contain",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#673ab7",
     },
     assetBundlePatterns: ["**/*"],
     ios: {
@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         edgeToEdgeEnabled: true,
         adaptiveIcon: {
             foregroundImage: "./assets/images/adaptive-icon.png",
-            backgroundColor: "#ffffff",
+            backgroundColor: "#673ab7",
         },
         package: "com.mina.app",
     },
