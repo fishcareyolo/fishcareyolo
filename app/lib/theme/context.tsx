@@ -1,8 +1,14 @@
+/**
+ * React context for theme state management.
+ *
+ * Provides theme state to the entire app and persists user preference.
+ */
+
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { useColorScheme as useNativeWindColorScheme } from "nativewind"
-import React, { createContext, useContext, useEffect, useState } from "react"
-
-type ColorScheme = "light" | "dark"
+import type React from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+import type { ColorScheme } from "@/lib/theme/types"
 
 interface ThemeContextType {
     colorScheme: ColorScheme

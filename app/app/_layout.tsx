@@ -1,12 +1,11 @@
 import "@/global.css"
 
-import { ModelProvider } from "@/lib/model"
-import { NAV_THEME } from "@/lib/theme"
-import { ThemeProvider, useTheme } from "@/lib/theme-context"
 import { ThemeProvider as NavThemeProvider } from "@react-navigation/native"
 import { PortalHost } from "@rn-primitives/portal"
 import { Stack } from "expo-router"
 import { StatusBar } from "expo-status-bar"
+import { ModelProvider } from "@/lib/model"
+import { NAV_THEME, ThemeProvider, useTheme } from "@/lib/theme"
 
 export { ErrorBoundary } from "expo-router"
 
