@@ -6,8 +6,9 @@ MINA is a React Native (Expo) app that uses a YOLOv8 model (exported to TFLite) 
 
 This repo is currently in the **initiation phase**: the overall plan is defined, but most core features are not implemented yet.
 
-## What It Will Do
+## What It Does
 
+- ✓ YOLOv8n model trained to detect 5 classes: bacterial_infection, fungal_infection, healthy, parasite, white_tail
 - Capture a photo using the device camera (or select from gallery)
 - Run YOLOv8 inference **on-device** (no network required)
 - Display bounding boxes + disease names with confidence scores
@@ -23,12 +24,13 @@ This repo is currently in the **initiation phase**: the overall plan is defined,
 ## Repository Layout
 
 - `app/`: Expo (React Native) app workspace (Expo Router + NativeWind, etc.)
-- `model/`: Python workspace for model training/export (scaffolded)
+- `model/`: Python workspace with trained YOLOv8n model + TFLite export
+
 ## Roadmap
 
-High-level phases:
+High-level phases (✓ = done):
 
-1. Python training pipeline (ultralytics YOLOv8n, export to int8 TFLite)
+1. ✓ Python training pipeline (ultralytics YOLOv8n, export to int8 TFLite)
 2. Expo foundation (types, JSON serialization, property tests)
 3. Storage service (AsyncStorage) + history sorting
 4. Inference service (react-native-fast-tflite) + confidence filtering
@@ -66,27 +68,36 @@ bun run fix
 
 ### Python model pipeline (`model/`)
 
-`model/pyproject.toml` exists, but dependencies/scripts are not wired up yet.
+The model is trained and released! You can download the TFLite model directly:
 
-When it’s ready, the intended workflow is via `uv`:
+- **Dev release (latest):** [best_full_integer_quant.tflite](https://github.com/fishcareyolo/fishcareyolo/releases/download/dev/best_full_integer_quant.tflite) (~3MB, Int8 quantized)
+- **Prod release (stable):** [best_full_integer_quant.tflite](https://github.com/fishcareyolo/fishcareyolo/releases/download/prod/best_full_integer_quant.tflite)
+
+For details on the model or to retrain, see [`model/`](model/) and the [Colab notebook](https://colab.research.google.com/github/fishcareyolo/fishcareyolo/blob/main/model/mina.ipynb).
+
+## Testing
+
+### Model tests (`model/tests/`)
+
+The Python pipeline includes property-based tests using `hypothesis`:
+
+- **Training config:** disease classes, dataset YAML, training params
+- **Detection structure (Property 5):** valid classes, confidence 0-1, bbox coordinates
+- **Confidence filtering (Property 2):** ≥0.3 threshold applied correctly
+- **Detection sorting (Property 3):** descending by confidence
+- **TFLite equivalence (Property 8):** PyTorch ↔ TFLite outputs match within 0.05 tolerance
 
 ```bash
 cd model
-uv sync
+pytest tests/ -v
 ```
 
-For now, consider it a placeholder for:
+### App tests (planned)
 
-- training a YOLOv8n model with `ultralytics`
-- exporting an int8 `.tflite` model for bundling into the app
-## Testing (Planned)
+Expo app tests will use `fast-check` for correctness properties:
+- Serialization round-trip
+- Detection sorting/filtering
 
-Planned tests include both unit tests and property-based tests:
-
-- Expo app: `fast-check` for correctness properties (serialization round-trip, sorting, filtering)
-- Python pipeline: `hypothesis` for export/inference equivalence
-
-The test suite is not implemented yet.
 ## Notes / Disclaimer
 
 This project provides informational guidance only and is not a substitute for veterinary advice. When in doubt, consult a qualified aquatic veterinarian.
