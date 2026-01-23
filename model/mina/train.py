@@ -57,7 +57,7 @@ def get_device() -> str:
     import torch
 
     if torch.cuda.is_available():
-        return "0"  # First GPU
+        return "0"  # first gpu, try this first
     return "cpu"
 
 
