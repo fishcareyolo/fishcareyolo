@@ -34,7 +34,6 @@ def get_data_yaml_path(data_dir: Path | None = None) -> Path:
             return yaml_path
         raise FileNotFoundError(f"data.yaml not found at: {yaml_path}")
 
-    # Look for dataset in common locations
     model_dir = Path(__file__).parent.parent
     possible_paths = [
         DATA_DIR / "data.yaml",
@@ -58,7 +57,7 @@ def get_device() -> str:
     import torch
 
     if torch.cuda.is_available():
-        return "0"  # Use first GPU
+        return "0"
     return "cpu"
 
 
@@ -85,9 +84,7 @@ def train(
         data_dir: Optional data directory
         patience: Early stopping patience
         device: Device to train on ('0' for GPU, 'cpu' for CPU, None for auto-detect)
-        hyp: Path to hyperparameters YAML file (e.g., from tuning). If provided,
-             uses these hyperparameters via Ultralytics cfg= parameter.
-             If None, uses hardcoded defaults.
+        hyp: Path to hyperparameters YAML file
 
     Returns:
         Path to the best model weights
@@ -95,29 +92,12 @@ def train(
     data_yaml = get_data_yaml_path(data_dir)
     print(f"Using dataset config: {data_yaml}")
 
-    # Auto-detect device if not specified
     if device is None:
         device = get_device()
     print(f"Using device: {device}")
 
-    # Load YOLOv8 nano model (optimized for mobile)
     model = YOLO(pretrained)
 
-    # Base training arguments (always used)
-    base_args = {
-        "data": str(data_yaml),
-        "epochs": epochs,
-        "imgsz": imgsz,
-        "batch": batch,
-        "name": name,
-        "save": True,
-        "save_period": -1,  # Only save best and last
-        "patience": patience,
-        "workers": 4,
-        "device": device,
-    }
-
-    # Train with tuned hyperparameters or hardcoded defaults
     if hyp is not None:
         hyp_path = Path(hyp)
         if not hyp_path.exists():
@@ -126,13 +106,31 @@ def train(
                 "Run tuning first: uv run mina-tune"
             )
         print(f"Using tuned hyperparameters from: {hyp_path}")
-        # Use Ultralytics cfg= parameter for safe YAML loading with validation
-        results = model.train(cfg=str(hyp_path), **base_args)
-    else:
-        print("Using hardcoded default hyperparameters")
-        # Augmentation settings for better generalization (fallback defaults)
         results = model.train(
-            **base_args,
+            cfg=str(hyp_path),
+            data=str(data_yaml),
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=batch,
+            name=name,
+            save=True,
+            save_period=-1,
+            patience=patience,
+            workers=4,
+            device=device,
+        )
+    else:
+        results = model.train(
+            data=str(data_yaml),
+            epochs=epochs,
+            imgsz=imgsz,
+            batch=batch,
+            name=name,
+            save=True,
+            save_period=-1,
+            patience=patience,
+            workers=4,
+            device=device,
             hsv_h=0.015,
             hsv_s=0.7,
             hsv_v=0.4,
@@ -145,7 +143,6 @@ def train(
             mixup=0.1,
         )
 
-    # Get path to best weights
     best_weights = Path(results.save_dir) / "weights" / "best.pt"
     print("\nTraining complete!")
     print(f"Best weights saved to: {best_weights}")
