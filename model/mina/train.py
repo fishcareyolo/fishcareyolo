@@ -57,7 +57,7 @@ def get_device() -> str:
     import torch
 
     if torch.cuda.is_available():
-        return "0"
+        return "0"  # First GPU
     return "cpu"
 
 
@@ -98,6 +98,19 @@ def train(
 
     model = YOLO(pretrained)
 
+    train_args = {
+        "data": str(data_yaml),
+        "epochs": epochs,
+        "imgsz": imgsz,
+        "batch": batch,
+        "name": name,
+        "save": True,
+        "save_period": -1,
+        "patience": patience,
+        "workers": 4,
+        "device": device,
+    }
+
     if hyp is not None:
         hyp_path = Path(hyp)
         if not hyp_path.exists():
@@ -106,31 +119,10 @@ def train(
                 "Run tuning first: uv run mina-tune"
             )
         print(f"Using tuned hyperparameters from: {hyp_path}")
-        results = model.train(
-            cfg=str(hyp_path),
-            data=str(data_yaml),
-            epochs=epochs,
-            imgsz=imgsz,
-            batch=batch,
-            name=name,
-            save=True,
-            save_period=-1,
-            patience=patience,
-            workers=4,
-            device=device,
-        )
+        results = model.train(cfg=str(hyp_path), **train_args)
     else:
         results = model.train(
-            data=str(data_yaml),
-            epochs=epochs,
-            imgsz=imgsz,
-            batch=batch,
-            name=name,
-            save=True,
-            save_period=-1,
-            patience=patience,
-            workers=4,
-            device=device,
+            **train_args,
             hsv_h=0.015,
             hsv_s=0.7,
             hsv_v=0.4,
