@@ -2,7 +2,7 @@
 CLI for training the fish disease detection model.
 
 Usage:
-    uv run mina-train [--epochs N] [--batch N] [--imgsz N] [--name NAME] [--device DEVICE]
+    uv run mina-train [--epochs N] [--batch N] [--imgsz N] [--name NAME] [--device DEVICE] [--hyp PATH]
 """
 
 import argparse
@@ -13,7 +13,7 @@ from mina.core.constants import DEFAULT_EPOCHS, DEFAULT_BATCH_SIZE, DEFAULT_IMAG
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Train YOLOv8n model for fish disease detection"
+        description="Train YOLOv8n model on fish disease dataset"
     )
     parser.add_argument(
         "--epochs",
@@ -43,7 +43,13 @@ def main():
         "--device",
         type=str,
         default=None,
-        help="Device to train on: '0' for GPU, 'cpu' for CPU (default: auto-detect)",
+        help="Device to use: '0' for GPU, 'cpu' for CPU (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--hyp",
+        type=str,
+        default=None,
+        help="Path to hyperparameters YAML file",
     )
 
     args = parser.parse_args()
@@ -54,6 +60,7 @@ def main():
         imgsz=args.imgsz,
         name=args.name,
         device=args.device,
+        hyp=args.hyp,
     )
 
 
