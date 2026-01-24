@@ -12,7 +12,7 @@ export default function SettingsScreen() {
 
     return (
         <View className="flex-1 bg-background px-5 pt-10">
-            <Text className="text-2xl font-semibold text-foreground">
+            <Text className="text-2xl font-semibold text-foreground text-center py-5">
                 Settings
             </Text>
 

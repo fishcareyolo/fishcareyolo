@@ -1,7 +1,14 @@
 import { useIsFocused } from "@react-navigation/native"
 import { CameraView, useCameraPermissions } from "expo-camera"
+import * as ImageManipulator from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
-import { ImageIcon, RefreshCcwIcon } from "lucide-react-native"
+import { useRouter } from "expo-router"
+import {
+    ImageIcon,
+    RefreshCcwIcon,
+    ZapIcon,
+    ZapOffIcon,
+} from "lucide-react-native"
 import * as React from "react"
 import {
     Linking,
@@ -16,18 +23,49 @@ import { Text } from "@/components/ui/text"
 import { useCamera } from "@/lib/camera"
 
 export default function HomeCameraScreen() {
+    const router = useRouter()
     const cameraRef = React.useRef<CameraView>(null)
     const { width: screenW, height: screenH } = useWindowDimensions()
-    const [ratio, setRatio] = React.useState<"4:3" | "16:9">("4:3")
+    const camSize = Math.min(screenW, screenH) - 40
+    const [ratio] = React.useState<"4:3" | "16:9">("4:3")
     const isFocused = useIsFocused()
     const [permission, requestPermission] = useCameraPermissions()
     const [lastCaptureUri, setLastCaptureUri] = React.useState<string | null>(
         null,
     )
     const [isGalleryLoading, setIsGalleryLoading] = React.useState(false)
-    const { cameraFacing, setCameraFacing } = useCamera()
+    const { cameraFacing, setCameraFacing, flashMode, setFlashMode } =
+        useCamera()
 
     const canShowCamera = permission?.granted && isFocused
+
+    const toggleFlash = () => {
+        const modes: ("off" | "on")[] = ["off", "on"]
+        const currentIndex = modes.indexOf(flashMode)
+        const nextIndex = (currentIndex + 1) % modes.length
+        const newMode = modes[nextIndex]
+        setFlashMode(newMode)
+    }
+
+    const getFlashIcon = () => {
+        switch (flashMode) {
+            case "on":
+                return ZapIcon
+            case "off":
+            default:
+                return ZapOffIcon
+        }
+    }
+
+    const getFlashIconProps = () => {
+        switch (flashMode) {
+            case "on":
+                return { className: "text-yellow-500" }
+            case "off":
+            default:
+                return { className: "text-foreground/50" }
+        }
+    }
 
     React.useEffect(() => {
         if (!canShowCamera) return
@@ -59,13 +97,14 @@ export default function HomeCameraScreen() {
                     }
                 }
 
-                if (!cancelled) setRatio(best)
+                if (!cancelled) {
+                    // Force square capture - ignore best ratio
+                }
             } catch {
                 // ignore: ratio discovery is best-effort
             }
         }
 
-        pickBestRatio()
         return () => {
             cancelled = true
         }
@@ -77,9 +116,40 @@ export default function HomeCameraScreen() {
                 quality: 0.85,
                 base64: false,
                 exif: false,
+                skipProcessing: false,
             })
 
-            if (photo?.uri) setLastCaptureUri(photo.uri)
+            if (photo?.uri) {
+                // Crop to square to match camera view
+                const { width, height } = photo
+                const size = Math.min(width, height)
+                const cropX = (width - size) / 2
+                const cropY = (height - size) / 2
+
+                const manipulatedImage = await ImageManipulator.manipulateAsync(
+                    photo.uri,
+                    [
+                        {
+                            crop: {
+                                originX: cropX,
+                                originY: cropY,
+                                width: size,
+                                height: size,
+                            },
+                        },
+                    ],
+                    {
+                        compress: 0.85,
+                        format: ImageManipulator.SaveFormat.JPEG,
+                    },
+                )
+
+                setLastCaptureUri(manipulatedImage.uri)
+                router.push({
+                    pathname: "/preview",
+                    params: { imageUri: manipulatedImage.uri },
+                })
+            }
         } catch (err) {
             console.warn("capture failed", err)
         }
@@ -119,20 +189,49 @@ export default function HomeCameraScreen() {
     }
 
     return (
-        <View className="flex-1">
-            <CameraView
-                ref={cameraRef}
-                style={{ flex: 1 }}
-                className="absolute inset-0"
-                facing={cameraFacing}
-                mode="picture"
-                ratio={ratio}
-            />
+        <View className="flex-1 items-center justify-center bg-background">
+            <View className="absolute top-0 left-0 right-0 flex-row justify-between pt-12 px-4 z-10">
+                <View className="w-10" />
+                <View className="items-center">
+                    <Pressable
+                        onPress={toggleFlash}
+                        className="h-10 w-10 items-center justify-center rounded-full bg-background/80"
+                    >
+                        <Icon
+                            as={getFlashIcon()}
+                            size={18}
+                            {...getFlashIconProps()}
+                        />
+                    </Pressable>
+                </View>
+            </View>
+            <View
+                style={{
+                    width: camSize,
+                    height: camSize,
+                    overflow: "hidden",
+                    borderRadius: 12,
+                }}
+            >
+                <CameraView
+                    ref={cameraRef}
+                    style={{
+                        width: camSize,
+                        height: camSize,
+                    }}
+                    facing={cameraFacing}
+                    mode="picture"
+                    flash={flashMode}
+                    onCameraReady={() =>
+                        console.log("Camera ready with flash mode :", flashMode)
+                    }
+                />
+            </View>
 
             <View className="absolute inset-x-0 bottom-0 items-center bg-transparent px-10 pb-6 pt-6">
                 <View className="flex-row items-center justify-between self-stretch">
                     <Pressable
-                        className="h-12 w-12 items-center justify-center rounded-full bg-black/20"
+                        className="h-12 w-12 items-center justify-center rounded-full bg-background/20"
                         onPress={async () => {
                             if (isGalleryLoading) return
                             setIsGalleryLoading(true)
@@ -144,7 +243,12 @@ export default function HomeCameraScreen() {
                                         base64: false,
                                     })
                                 if (!result.canceled && result.assets[0]) {
-                                    setLastCaptureUri(result.assets[0].uri)
+                                    const uri = result.assets[0].uri
+                                    setLastCaptureUri(uri)
+                                    router.push({
+                                        pathname: "/crop",
+                                        params: { imageUri: uri },
+                                    })
                                 }
                             } catch (err) {
                                 console.warn("gallery launch failed", err)
@@ -157,19 +261,19 @@ export default function HomeCameraScreen() {
                         <Icon
                             as={ImageIcon}
                             size={20}
-                            className={`${isGalleryLoading ? "text-white/50" : "text-white"}`}
+                            className={`${isGalleryLoading ? "text-foreground/50" : "text-foreground"}`}
                         />
                     </Pressable>
 
                     <Pressable
                         onPress={capture}
-                        className="h-20 w-20 items-center justify-center rounded-full border-2 border-white/70 bg-black/15"
+                        className="h-20 w-20 items-center justify-center rounded-full border-2 border-foreground/70 bg-background/15"
                     >
-                        <View className="h-[68px] w-[68px] rounded-full bg-white/90" />
+                        <View className="h-[68px] w-[68px] rounded-full bg-foreground/90" />
                     </Pressable>
 
                     <Pressable
-                        className="h-12 w-12 items-center justify-center rounded-full bg-black/20"
+                        className="h-12 w-12 items-center justify-center rounded-full bg-background/20"
                         onPress={() =>
                             setCameraFacing(
                                 cameraFacing === "back" ? "front" : "back",
@@ -179,7 +283,7 @@ export default function HomeCameraScreen() {
                         <Icon
                             as={RefreshCcwIcon}
                             size={20}
-                            className="text-white"
+                            className="text-foreground"
                         />
                     </Pressable>
                 </View>
