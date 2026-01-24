@@ -98,7 +98,7 @@ export default function HomeCameraScreen() {
                 }
 
                 if (!cancelled) {
-                    // Force square capture - ignore best ratio
+                    // Square capture is enforced via post-processing crop
                 }
             } catch {
                 // ignore: ratio discovery is best-effort
