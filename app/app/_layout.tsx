@@ -31,8 +31,18 @@ function RootLayoutContent() {
                         presentation: "transparentModal",
                     }}
                 />
-                <Stack.Screen name="crop" />
-                <Stack.Screen name="preview" />
+                <Stack.Screen
+                    name="crop"
+                    options={{
+                        presentation: "transparentModal",
+                    }}
+                />
+                <Stack.Screen
+                    name="preview"
+                    options={{
+                        presentation: "transparentModal",
+                    }}
+                />
                 <Stack.Screen name="+not-found" />
             </Stack>
             <PortalHost />

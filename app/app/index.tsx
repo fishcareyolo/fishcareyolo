@@ -1,4 +1,4 @@
-import { useIsFocused } from "@react-navigation/native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import * as ImageManipulator from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
@@ -26,6 +26,7 @@ import { useCamera } from "@/lib/camera"
 
 export default function HomeCameraScreen() {
     const router = useRouter()
+    const navigation = useNavigation()
     const cameraRef = React.useRef<CameraView>(null)
     const { width: screenW, height: screenH } = useWindowDimensions()
     const camSize = Math.min(screenW, screenH) - 40
@@ -34,10 +35,47 @@ export default function HomeCameraScreen() {
         null,
     )
     const [isGalleryLoading, setIsGalleryLoading] = React.useState(false)
-    const { cameraFacing, setCameraFacing, flashMode, setFlashMode } =
-        useCamera()
+    const {
+        cameraFacing,
+        setCameraFacing,
+        flashMode,
+        setFlashMode,
+        isCameraActive,
+        setCameraActive,
+    } = useCamera()
 
-    const canShowCamera = permission?.granted
+    const canShowCamera = permission?.granted && isCameraActive
+
+    const sleepTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    )
+
+    // Keep camera active when index screen is focused
+    useFocusEffect(
+        React.useCallback(() => {
+            // Clear any pending sleep timer when returning to camera
+            if (sleepTimerRef.current) {
+                clearTimeout(sleepTimerRef.current)
+                sleepTimerRef.current = null
+            }
+            setCameraActive(true)
+        }, [setCameraActive]),
+    )
+
+    // Manage camera sleep timer on navigation away
+    React.useEffect(() => {
+        const unsubscribe = navigation.addListener("blur", () => {
+            // Start 5 second timer before turning off camera
+            sleepTimerRef.current = setTimeout(() => {
+                setCameraActive(false)
+            }, 5000)
+        })
+
+        return () => {
+            unsubscribe()
+            if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current)
+        }
+    }, [navigation, setCameraActive])
 
     const toggleFlash = () => {
         const modes: ("off" | "on")[] = ["off", "on"]
@@ -119,7 +157,7 @@ export default function HomeCameraScreen() {
         return <View className="flex-1 bg-background" />
     }
 
-    if (!canShowCamera) {
+    if (!permission.granted) {
         return (
             <View className="flex-1 items-center justify-center bg-background px-6">
                 <Text className="text-xl font-semibold text-foreground">
@@ -146,6 +184,10 @@ export default function HomeCameraScreen() {
                 </View>
             </View>
         )
+    }
+
+    if (!isCameraActive) {
+        return <View className="flex-1 bg-background" />
     }
 
     return (

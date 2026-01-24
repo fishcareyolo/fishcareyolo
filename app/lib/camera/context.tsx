@@ -14,6 +14,8 @@ interface CameraContextType {
     flashMode: FlashMode
     setCameraFacing: (facing: CameraFacing) => void
     setFlashMode: (mode: FlashMode) => void
+    isCameraActive: boolean
+    setCameraActive: (active: boolean) => void
 }
 
 const CameraContext = createContext<CameraContextType | undefined>(undefined)
@@ -23,6 +25,7 @@ const CAMERA_STORAGE_KEY = "@app/camera"
 export function CameraProvider({ children }: { children: React.ReactNode }) {
     const [cameraFacing, setCameraFacing] = useState<CameraFacing>("back")
     const [flashMode, setFlashMode] = useState<FlashMode>("off")
+    const [isCameraActive, setIsCameraActive] = useState(true)
 
     useEffect(() => {
         const loadCameraSettings = async () => {
@@ -74,6 +77,8 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
                 flashMode,
                 setCameraFacing: handleSetCameraFacing,
                 setFlashMode: handleSetFlashMode,
+                isCameraActive,
+                setCameraActive: setIsCameraActive,
             }}
         >
             {children}
