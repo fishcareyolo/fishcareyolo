@@ -4,8 +4,10 @@ import * as ImageManipulator from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
 import { useRouter } from "expo-router"
 import {
+    HistoryIcon,
     ImageIcon,
     RefreshCcwIcon,
+    SettingsIcon,
     ZapIcon,
     ZapOffIcon,
 } from "lucide-react-native"
@@ -155,16 +157,37 @@ export default function HomeCameraScreen() {
     return (
         <View className="flex-1 items-center justify-center bg-background">
             <View className="absolute top-0 left-0 right-0 flex-row justify-between pt-12 px-4 z-10">
-                <View className="w-10" />
                 <View className="items-center">
                     <Pressable
                         onPress={toggleFlash}
-                        className="h-10 w-10 items-center justify-center rounded-full bg-background/80"
+                        className="h-16 w-16 items-center justify-center rounded-full bg-background/80"
                     >
                         <Icon
                             as={getFlashIcon()}
-                            size={18}
+                            size={32}
                             {...getFlashIconProps()}
+                        />
+                    </Pressable>
+                </View>
+                <View className="flex-row gap-3">
+                    <Pressable
+                        onPress={() => router.push("/history")}
+                        className="h-16 w-16 items-center justify-center rounded-full bg-background/80"
+                    >
+                        <Icon
+                            as={HistoryIcon}
+                            size={32}
+                            className="text-foreground"
+                        />
+                    </Pressable>
+                    <Pressable
+                        onPress={() => router.push("/settings")}
+                        className="h-16 w-16 items-center justify-center rounded-full bg-background/80"
+                    >
+                        <Icon
+                            as={SettingsIcon}
+                            size={32}
+                            className="text-foreground"
                         />
                     </Pressable>
                 </View>
@@ -175,6 +198,7 @@ export default function HomeCameraScreen() {
                     height: camSize,
                     overflow: "hidden",
                     borderRadius: 12,
+                    marginTop: -40,
                 }}
             >
                 <CameraView
@@ -192,10 +216,10 @@ export default function HomeCameraScreen() {
                 />
             </View>
 
-            <View className="absolute inset-x-0 bottom-0 items-center bg-transparent px-10 pb-6 pt-6">
+            <View className="absolute inset-x-0 bottom-0 items-center bg-transparent px-10 pb-16 pt-6">
                 <View className="flex-row items-center justify-between self-stretch">
                     <Pressable
-                        className="h-12 w-12 items-center justify-center rounded-full bg-background/20"
+                        className="h-16 w-16 items-center justify-center rounded-full bg-background/20"
                         onPress={async () => {
                             if (isGalleryLoading) return
                             setIsGalleryLoading(true)
@@ -224,20 +248,20 @@ export default function HomeCameraScreen() {
                     >
                         <Icon
                             as={ImageIcon}
-                            size={20}
+                            size={28}
                             className={`${isGalleryLoading ? "text-foreground/50" : "text-foreground"}`}
                         />
                     </Pressable>
 
                     <Pressable
                         onPress={capture}
-                        className="h-20 w-20 items-center justify-center rounded-full border-2 border-foreground/70 bg-background/15"
+                        className="h-24 w-24 items-center justify-center rounded-full border-2 border-foreground/70 bg-background/15"
                     >
-                        <View className="h-[68px] w-[68px] rounded-full bg-foreground/90" />
+                        <View className="h-20 w-20 rounded-full bg-foreground/90" />
                     </Pressable>
 
                     <Pressable
-                        className="h-12 w-12 items-center justify-center rounded-full bg-background/20"
+                        className="h-16 w-16 items-center justify-center rounded-full bg-background/20"
                         onPress={() =>
                             setCameraFacing(
                                 cameraFacing === "back" ? "front" : "back",
@@ -246,7 +270,7 @@ export default function HomeCameraScreen() {
                     >
                         <Icon
                             as={RefreshCcwIcon}
-                            size={20}
+                            size={28}
                             className="text-foreground"
                         />
                     </Pressable>
