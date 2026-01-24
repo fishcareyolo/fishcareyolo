@@ -1,4 +1,5 @@
 cd app
+bun scripts/generate-css.ts
 bun fix
 bun tsc --noEmit
 cd ../model

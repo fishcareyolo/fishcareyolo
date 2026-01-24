@@ -2,18 +2,26 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import { CameraView, useCameraPermissions } from "expo-camera"
 import * as ImageManipulator from "expo-image-manipulator"
 import * as ImagePicker from "expo-image-picker"
+import * as MediaLibrary from "expo-media-library"
 import { useRouter } from "expo-router"
 import {
     FlashlightIcon,
     FlashlightOffIcon,
     HistoryIcon,
     ImageIcon,
+    Minus,
+    Plus,
     RefreshCcwIcon,
     SettingsIcon,
+    ChevronUp,
+    ChevronDown,
 } from "lucide-react-native"
 import * as React from "react"
 import {
+    FlatList,
+    Image,
     Linking,
+    Modal,
     Platform,
     Pressable,
     useWindowDimensions,
@@ -21,6 +29,7 @@ import {
 } from "react-native"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
+import { SliderComponent } from "@/components/ui/slider"
 import { Text } from "@/components/ui/text"
 import { useCamera } from "@/lib/camera"
 
@@ -35,6 +44,11 @@ export default function HomeCameraScreen() {
         null,
     )
     const [isGalleryLoading, setIsGalleryLoading] = React.useState(false)
+    const [zoom, setZoom] = React.useState(0)
+    const [showCarousel, setShowCarousel] = React.useState(false)
+    const [recentPhotos, setRecentPhotos] = React.useState<
+        MediaLibrary.Asset[]
+    >([])
     const {
         cameraFacing,
         setCameraFacing,
@@ -43,6 +57,86 @@ export default function HomeCameraScreen() {
         isCameraActive,
         setCameraActive,
     } = useCamera()
+
+    const [touchStart, setTouchStart] = React.useState<number | null>(null)
+
+    const loadRecentPhotos = async () => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync()
+            if (status !== "granted") {
+                console.warn("media library permission denied")
+                return
+            }
+
+            const photos = await MediaLibrary.getAssetsAsync({
+                mediaType: "photo",
+                first: 20,
+                sortBy: [["creationTime", false]],
+            })
+            setRecentPhotos(photos.assets)
+        } catch (err) {
+            console.warn("failed to load recent photos", err)
+        }
+    }
+
+    React.useEffect(() => {
+        loadRecentPhotos()
+    }, [])
+
+    const selectPhotoFromCarousel = async (asset: MediaLibrary.Asset) => {
+        try {
+            const assetInfo = await MediaLibrary.getAssetInfoAsync(asset)
+            const uri = assetInfo.localUri || assetInfo.uri
+            if (uri) {
+                setLastCaptureUri(uri)
+                setShowCarousel(false)
+                router.push({
+                    pathname: "/crop",
+                    params: { imageUri: uri },
+                })
+            }
+        } catch (err) {
+            console.warn("failed to load photo", err)
+        }
+    }
+
+    const openGallery = async () => {
+        if (isGalleryLoading) return
+        setIsGalleryLoading(true)
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                quality: 0.85,
+                base64: false,
+            })
+            if (!result.canceled && result.assets[0]) {
+                const uri = result.assets[0].uri
+                setLastCaptureUri(uri)
+                router.push({
+                    pathname: "/crop",
+                    params: { imageUri: uri },
+                })
+            }
+        } catch (err) {
+            console.warn("gallery launch failed", err)
+        } finally {
+            setIsGalleryLoading(false)
+        }
+    }
+
+    const handleTouchStart = (e: any) => {
+        setTouchStart(e.nativeEvent.pageY)
+    }
+
+    const handleTouchEnd = (e: any) => {
+        if (touchStart === null) return
+        const touchEnd = e.nativeEvent.pageY
+        const diff = touchStart - touchEnd
+        if (diff > 50) {
+            openGallery()
+        }
+        setTouchStart(null)
+    }
 
     const canShowCamera = permission?.granted && isCameraActive
 
@@ -168,7 +262,7 @@ export default function HomeCameraScreen() {
 
     return (
         <View className="flex-1 items-center justify-center bg-background">
-            <View className="absolute top-0 left-0 right-0 flex-row justify-between pt-12 px-4 z-10">
+            <View className="absolute top-0 left-0 right-0 flex-row justify-between pt-20 px-4 z-10">
                 <View className="items-center">
                     <Pressable
                         onPress={toggleFlash}
@@ -222,40 +316,88 @@ export default function HomeCameraScreen() {
                     facing={cameraFacing}
                     mode="picture"
                     flash={flashMode}
+                    zoom={zoom}
                     onCameraReady={() =>
                         console.log("Camera ready with flash mode :", flashMode)
                     }
                 />
             </View>
 
-            <View className="absolute inset-x-0 bottom-0 items-center bg-transparent px-10 pb-16 pt-6">
+            <View className="w-full px-6 py-4">
+                <View className="flex-row items-center gap-4">
+                    <Pressable onPress={() => setZoom(Math.max(0, zoom - 0.1))}>
+                        <Icon
+                            as={Minus}
+                            size={20}
+                            className="text-foreground"
+                        />
+                    </Pressable>
+                    <View className="flex-1">
+                        <SliderComponent
+                            value={zoom}
+                            onValueChange={setZoom}
+                            minimumValue={0}
+                            maximumValue={1}
+                            step={0.01}
+                        />
+                    </View>
+                    <Pressable onPress={() => setZoom(Math.min(1, zoom + 0.1))}>
+                        <Icon as={Plus} size={20} className="text-foreground" />
+                    </Pressable>
+                </View>
+            </View>
+
+            <View
+                className="absolute inset-x-0 bottom-0 items-center bg-transparent px-10 pb-16 pt-6"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+            >
+                <Pressable
+                    className="mb-4 items-center"
+                    onPress={() => setShowCarousel(!showCarousel)}
+                >
+                    <Icon
+                        as={showCarousel ? ChevronDown : ChevronUp}
+                        size={24}
+                        className="text-foreground/60"
+                    />
+                </Pressable>
+
+                {showCarousel && (
+                    <View className="mb-6 w-full">
+                        <FlatList
+                            data={recentPhotos}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            keyExtractor={(item) => item.id}
+                            renderItem={({ item }) => (
+                                <Pressable
+                                    onPress={() =>
+                                        selectPhotoFromCarousel(item)
+                                    }
+                                    className="mr-3"
+                                >
+                                    <Image
+                                        source={{ uri: item.uri }}
+                                        style={{
+                                            width: 80,
+                                            height: 80,
+                                            borderRadius: 8,
+                                        }}
+                                    />
+                                </Pressable>
+                            )}
+                            contentContainerStyle={{
+                                paddingHorizontal: 8,
+                            }}
+                        />
+                    </View>
+                )}
+
                 <View className="flex-row items-center justify-between self-stretch">
                     <Pressable
                         className="h-16 w-16 items-center justify-center rounded-full bg-background/20"
-                        onPress={async () => {
-                            if (isGalleryLoading) return
-                            setIsGalleryLoading(true)
-                            try {
-                                const result =
-                                    await ImagePicker.launchImageLibraryAsync({
-                                        mediaTypes: ["images"],
-                                        quality: 0.85,
-                                        base64: false,
-                                    })
-                                if (!result.canceled && result.assets[0]) {
-                                    const uri = result.assets[0].uri
-                                    setLastCaptureUri(uri)
-                                    router.push({
-                                        pathname: "/crop",
-                                        params: { imageUri: uri },
-                                    })
-                                }
-                            } catch (err) {
-                                console.warn("gallery launch failed", err)
-                            } finally {
-                                setIsGalleryLoading(false)
-                            }
-                        }}
+                        onPress={openGallery}
                         disabled={isGalleryLoading}
                     >
                         <Icon
