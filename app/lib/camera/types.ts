@@ -3,4 +3,4 @@
  */
 
 export type CameraFacing = "front" | "back"
-export type FlashMode = "off" | "on" | "auto"
+export type FlashMode = "off" | "on"

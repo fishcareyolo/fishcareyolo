@@ -1,12 +1,5 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs"
-import {
-    CameraIcon,
-    CameraOffIcon,
-    ClockIcon,
-    HistoryIcon,
-    Settings2Icon,
-    SettingsIcon,
-} from "lucide-react-native"
+import { CameraIcon, HistoryIcon, SettingsIcon } from "lucide-react-native"
 import { Platform, Pressable, Text, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Icon } from "@/components/ui/icon"
@@ -25,16 +18,10 @@ function TabItem({
 }) {
     const IconCmp =
         icon === "camera"
-            ? focused
-                ? CameraIcon
-                : CameraOffIcon
+            ? CameraIcon
             : icon === "history"
-              ? focused
-                  ? HistoryIcon
-                  : ClockIcon
-              : focused
-                ? Settings2Icon
-                : SettingsIcon
+              ? HistoryIcon
+              : SettingsIcon
 
     return (
         <Pressable
@@ -62,12 +49,6 @@ function TabItem({
                 >
                     {label}
                 </Text>
-                <View
-                    className={cn(
-                        "absolute bottom-0 h-[2px] w-7 rounded-full",
-                        focused ? "bg-foreground" : "bg-transparent",
-                    )}
-                />
             </View>
         </Pressable>
     )
@@ -79,6 +60,12 @@ export function FlatTabBar({
     navigation,
 }: BottomTabBarProps) {
     const insets = useSafeAreaInsets()
+
+    // Hide tab bar when on crop or preview screens
+    const currentRoute = state.routes[state.index]?.name
+    if (currentRoute === "crop" || currentRoute === "preview") {
+        return null
+    }
 
     return (
         <View

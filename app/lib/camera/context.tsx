@@ -12,10 +12,8 @@ import type { CameraFacing, FlashMode } from "@/lib/camera/types"
 interface CameraContextType {
     cameraFacing: CameraFacing
     flashMode: FlashMode
-    torchEnabled: boolean
     setCameraFacing: (facing: CameraFacing) => void
     setFlashMode: (mode: FlashMode) => void
-    setTorchEnabled: (enabled: boolean) => void
 }
 
 const CameraContext = createContext<CameraContextType | undefined>(undefined)
@@ -25,7 +23,6 @@ const CAMERA_STORAGE_KEY = "@app/camera"
 export function CameraProvider({ children }: { children: React.ReactNode }) {
     const [cameraFacing, setCameraFacing] = useState<CameraFacing>("back")
     const [flashMode, setFlashMode] = useState<FlashMode>("off")
-    const [torchEnabled, setTorchEnabled] = useState(false)
 
     useEffect(() => {
         const loadCameraSettings = async () => {
@@ -36,9 +33,6 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
                     if (parsed.cameraFacing)
                         setCameraFacing(parsed.cameraFacing)
                     if (parsed.flashMode) setFlashMode(parsed.flashMode)
-                    if (typeof parsed.torchEnabled === "boolean") {
-                        setTorchEnabled(parsed.torchEnabled)
-                    }
                 }
             } catch (e) {
                 console.error("Failed to load camera settings:", e)
@@ -57,17 +51,11 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
         persistSettings({ flashMode: mode })
     }
 
-    const handleSetTorchEnabled = (enabled: boolean) => {
-        setTorchEnabled(enabled)
-        persistSettings({ torchEnabled: enabled })
-    }
-
     const persistSettings = async (updates: Partial<CameraContextType>) => {
         try {
             const current = {
                 cameraFacing,
                 flashMode,
-                torchEnabled,
                 ...updates,
             }
             await AsyncStorage.setItem(
@@ -84,10 +72,8 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
             value={{
                 cameraFacing,
                 flashMode,
-                torchEnabled,
                 setCameraFacing: handleSetCameraFacing,
                 setFlashMode: handleSetFlashMode,
-                setTorchEnabled: handleSetTorchEnabled,
             }}
         >
             {children}
