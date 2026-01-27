@@ -5,12 +5,19 @@
  * Non-Maximum Suppression (NMS) to filter overlapping detections.
  */
 
+import { loadTensorflowModel, type TensorflowModel } from "react-native-fast-tflite"
+import * as ImageManipulator from "expo-image-manipulator"
+import * as FileSystem from "expo-file-system"
 import { DISEASE_CLASSES } from "@/lib/model/types"
 import type { BoundingBox, Detection, DiseaseClass } from "@/lib/model/types"
 
 const IMAGE_SIZE = 640
 const CONFIDENCE_THRESHOLD = 0.3
 const IOU_THRESHOLD = 0.45
+
+// Cached model instance to avoid reloading
+let cachedModel: TensorflowModel | null = null
+let cachedModelPath: string | null = null
 
 interface RawDetection {
     classIndex: number
@@ -194,3 +201,157 @@ export interface InferenceResult {
 }
 
 const NUM_ANCHORS = 8400
+
+/**
+ * Load TFLite model from file path.
+ * Model is cached to avoid reloading on subsequent calls.
+ *
+ * @param modelPath - Local file path to the TFLite model
+ * @returns Loaded TensorflowModel instance
+ */
+export async function loadModel(modelPath: string): Promise<TensorflowModel> {
+    // Return cached model if already loaded for this path
+    if (cachedModel && cachedModelPath === modelPath) {
+        return cachedModel
+    }
+
+    // Load new model
+    try {
+        const model = await loadTensorflowModel({
+            url: `file://${modelPath}`,
+        })
+        cachedModel = model
+        cachedModelPath = modelPath
+        return model
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Failed to load TFLite model: ${message}`)
+    }
+}
+
+/**
+ * Check if a model is currently loaded and cached.
+ *
+ * @returns True if model is loaded
+ */
+export function isModelLoaded(): boolean {
+    return cachedModel !== null
+}
+
+/**
+ * Dispose of the cached model and free resources.
+ */
+export function disposeModel(): void {
+    cachedModel = null
+    cachedModelPath = null
+}
+
+/**
+ * Preprocess image for model input.
+ * 
+ * NOTE: This is a simplified implementation. For production use, we need proper
+ * image decoding to RGB tensor. Options:
+ * 1. Use vision-camera-resize-plugin with VisionCamera integration
+ * 2. Create native module for image decoding
+ * 3. Use expo-gl or react-native-skia for pixel access
+ * 
+ * For now, we create a placeholder tensor that simulates the expected input format.
+ * This allows the rest of the inference pipeline to be tested.
+ *
+ * @param imageUri - URI to the image file  
+ * @returns Placeholder RGB tensor (640x640x3)
+ */
+async function preprocessImage(imageUri: string): Promise<Uint8Array> {
+    try {
+        // Resize image to 640x640
+        const resized = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: IMAGE_SIZE, height: IMAGE_SIZE } }],
+            {
+                compress: 0.9,
+                format: ImageManipulator.SaveFormat.JPEG,
+            }
+        )
+
+        // TODO: Decode image to RGB pixel data
+        // For now, create a placeholder tensor filled with gray values
+        // This won't produce meaningful results but allows testing the pipeline
+        const tensorSize = IMAGE_SIZE * IMAGE_SIZE * 3
+        const tensor = new Uint8Array(tensorSize)
+        
+        // Fill with gray color (128, 128, 128) for testing
+        for (let i = 0; i < tensorSize; i++) {
+            tensor[i] = 128
+        }
+
+        console.warn(
+            "WARNING: Using placeholder image tensor. " +
+            "Proper image decoding not yet implemented. " +
+            "Results will not be meaningful until image preprocessing is completed."
+        )
+
+        return tensor
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Failed to preprocess image: ${message}`)
+    }
+}
+
+/**
+ * Run inference on an image using the TFLite model.
+ *
+ * @param imageUri - URI to the image file
+ * @param modelPath - Local file path to the TFLite model
+ * @returns Inference result with detections and timing
+ */
+export async function runInference(
+    imageUri: string,
+    modelPath: string
+): Promise<InferenceResult> {
+    const startTime = Date.now()
+
+    try {
+        // Step 1: Load model
+        const model = await loadModel(modelPath)
+
+        // Step 2: Preprocess image
+        const inputTensor = await preprocessImage(imageUri)
+
+        // Step 3: Run model inference
+        const outputs = model.runSync([inputTensor])
+
+        // Step 4: Parse YOLO output
+        // The model outputs raw detections in YOLO format
+        const rawOutput = outputs[0] as Float32Array
+        const rawDetections = parseYolov8Output(rawOutput, IMAGE_SIZE, IMAGE_SIZE)
+
+        // Step 5: Apply NMS to remove overlapping boxes
+        const nmsDetections = applyNMS(rawDetections, IOU_THRESHOLD)
+
+        // Step 6: Filter by confidence threshold
+        const filteredDetections = filterByConfidence(
+            nmsDetections,
+            CONFIDENCE_THRESHOLD
+        )
+
+        // Step 7: Sort by confidence (descending)
+        const sortedDetections = sortByConfidence(filteredDetections)
+
+        // Step 8: Convert to Detection objects
+        const detections = convertToDetections(
+            sortedDetections,
+            IMAGE_SIZE,
+            IMAGE_SIZE
+        )
+
+        const inferenceTimeMs = Date.now() - startTime
+
+        return {
+            detections,
+            inferenceTimeMs,
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Inference failed: ${message}`)
+    }
+}

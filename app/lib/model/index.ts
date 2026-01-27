@@ -72,8 +72,12 @@ export {
 export {
     applyNMS,
     convertToDetections,
+    disposeModel,
     filterByConfidence,
+    isModelLoaded,
+    loadModel,
     parseYolov8Output,
+    runInference,
     sortByConfidence,
     type InferenceResult,
 } from "@/lib/model/inference"

@@ -17,6 +17,10 @@ import {
     getLocalModelPath,
     initializeModel,
 } from "@/lib/model/manager"
+import {
+    runInference as runModelInference,
+    type InferenceResult,
+} from "@/lib/model/inference"
 import type { ModelState } from "@/lib/model/types"
 
 interface ModelContextValue extends ModelState {
@@ -24,6 +28,8 @@ interface ModelContextValue extends ModelState {
     forceUpdate: () => Promise<void>
     /** Get the local file path to the model (for TFLite) */
     getModelPath: () => Promise<string | null>
+    /** Run inference on an image */
+    runInference: (imageUri: string) => Promise<InferenceResult | null>
 }
 
 const initialState: ModelState = {
@@ -83,8 +89,39 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         return getLocalModelPath()
     }, [])
 
+    const runInference = useCallback(
+        async (imageUri: string): Promise<InferenceResult | null> => {
+            try {
+                // Check if model is ready
+                if (!state.isReady || state.error) {
+                    console.warn("Model not ready for inference:", state.error)
+                    return null
+                }
+
+                // Get model path
+                const modelPath = await getLocalModelPath()
+                if (!modelPath) {
+                    console.warn("Model file not found")
+                    return null
+                }
+
+                // Run inference
+                const result = await runModelInference(imageUri, modelPath)
+                return result
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error)
+                console.error("Inference error:", message)
+                return null
+            }
+        },
+        [state.isReady, state.error]
+    )
+
     return (
-        <ModelContext.Provider value={{ ...state, forceUpdate, getModelPath }}>
+        <ModelContext.Provider
+            value={{ ...state, forceUpdate, getModelPath, runInference }}
+        >
             {children}
         </ModelContext.Provider>
     )
