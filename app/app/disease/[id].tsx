@@ -23,9 +23,8 @@ import type { DiseaseClass } from "@/lib/model/types"
 export default function DiseaseInfoScreen() {
     const router = useRouter()
     const navigation = useNavigation()
-    const { diseaseClass } = useLocalSearchParams<{
-        diseaseClass: DiseaseClass
-    }>()
+    const { id } = useLocalSearchParams<{ id: string }>()
+    const diseaseClass = id as DiseaseClass
 
     // Hide tab bar on this screen
     useEffect(() => {
