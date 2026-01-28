@@ -9,8 +9,8 @@
         "web": "expo start -c --web",
         "clean": "rm -rf .expo node_modules",
         "fix": "biome format --write",
-        "build:dev": "eas build --profile development --platform all",
-        "build:prod": "eas build --profile production --platform all"
+        "build:dev": "eas build --profile development --platform android",
+        "build:prod": "eas build --profile production --platform android"
     },
     "dependencies": {
         "@react-navigation/native": "^7.0.0",
