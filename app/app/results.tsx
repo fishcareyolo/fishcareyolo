@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import { ActivityIndicator, Image, ScrollView, View } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import { Skia, matchFont, ImageFormat } from "@shopify/react-native-skia"
@@ -8,11 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Text } from "@/components/ui/text"
 import { useModel } from "@/lib/model"
 import type { InferenceResult } from "@/lib/model/inference"
+import { saveHistoryItem, getHistoryItem } from "@/lib/history/storage"
 
 export default function ResultsScreen() {
     const router = useRouter()
     const navigation = useNavigation()
-    const { imageUri } = useLocalSearchParams<{ imageUri: string }>()
+    const { imageUri, historyId } = useLocalSearchParams<{
+        imageUri?: string
+        historyId?: string
+    }>()
     const { runInference, isReady } = useModel()
 
     const [isAnalyzing, setIsAnalyzing] = useState(true)
@@ -21,6 +25,7 @@ export default function ResultsScreen() {
     const [processedImageUri, setProcessedImageUri] = useState<string | null>(
         null,
     )
+    const savedRef = useRef(false)
 
     useEffect(() => {
         navigation.setOptions({
@@ -35,7 +40,28 @@ export default function ResultsScreen() {
     }, [navigation])
 
     useEffect(() => {
-        async function analyze() {
+        async function load() {
+            // Case 1: Load existing history item
+            if (historyId) {
+                try {
+                    setIsAnalyzing(true)
+                    const item = await getHistoryItem(historyId)
+                    if (item) {
+                        setResults(item.results)
+                        setProcessedImageUri(item.processedImageUri)
+                        // We don't need to re-analyze or save
+                    } else {
+                        setError("History item not found")
+                    }
+                } catch (e) {
+                    setError("Failed to load history item")
+                } finally {
+                    setIsAnalyzing(false)
+                }
+                return
+            }
+
+            // Case 2: New Analysis
             if (!imageUri) {
                 setError("No image provided")
                 setIsAnalyzing(false)
@@ -63,6 +89,8 @@ export default function ResultsScreen() {
 
                 setResults(result)
 
+                let finalProcessedUri = imageUri
+
                 // 2. Process Image with Skia (Overlay Bounding Boxes)
                 if (result.detections.length > 0) {
                     try {
@@ -71,6 +99,7 @@ export default function ResultsScreen() {
                             result,
                         )
                         setProcessedImageUri(processedUri)
+                        finalProcessedUri = processedUri
                     } catch (e) {
                         console.error("Failed to process image overlays:", e)
                         // Fallback to original image if overlay processing fails
@@ -78,6 +107,22 @@ export default function ResultsScreen() {
                     }
                 } else {
                     setProcessedImageUri(imageUri)
+                }
+
+                // 3. Save to History (if not already saved in this session)
+                if (!savedRef.current) {
+                    savedRef.current = true
+                    try {
+                        await saveHistoryItem({
+                            timestamp: Date.now(),
+                            originalImageUri: imageUri,
+                            processedImageUri: finalProcessedUri,
+                            results: result,
+                        })
+                        console.log("Saved to history successfully")
+                    } catch (e) {
+                        console.error("Failed to save history:", e)
+                    }
                 }
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err)
@@ -87,8 +132,8 @@ export default function ResultsScreen() {
             }
         }
 
-        analyze()
-    }, [imageUri, isReady, runInference])
+        load()
+    }, [imageUri, historyId, isReady, runInference])
 
     // Helper to draw overlays and save image
     const processImageWithOverlays = async (
