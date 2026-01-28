@@ -3,7 +3,16 @@ import { storage } from "@/lib/storage"
 import type { HistoryItem } from "./types"
 
 const STORAGE_KEY = "mina_history_items"
-const HISTORY_DIR = `${(FileSystem as { documentDirectory?: string }).documentDirectory ?? ""}history/`
+const documentDirectory = (FileSystem as { documentDirectory?: string })
+    .documentDirectory
+
+if (!documentDirectory) {
+    throw new Error(
+        "Document directory not available - cannot initialize history storage",
+    )
+}
+
+const HISTORY_DIR = `${documentDirectory}history/`
 
 // Ensure history directory exists
 async function ensureHistoryDirectory() {
