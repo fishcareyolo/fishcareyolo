@@ -204,8 +204,6 @@ export interface InferenceResult {
     inferenceTimeMs: number
 }
 
-const NUM_ANCHORS = 8400
-
 /**
  * Load TFLite model from file path.
  * Model is cached to avoid reloading on subsequent calls.
