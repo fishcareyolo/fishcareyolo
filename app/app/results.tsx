@@ -119,7 +119,6 @@ export default function ResultsScreen() {
                             processedImageUri: finalProcessedUri,
                             results: result,
                         })
-                        console.log("Saved to history successfully")
                     } catch (e) {
                         console.error("Failed to save history:", e)
                     }
