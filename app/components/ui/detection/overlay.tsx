@@ -7,7 +7,7 @@ import Animated, {
     withSpring,
 } from "react-native-reanimated"
 import type { Detection } from "@/lib/model/types"
-import { getBoundingBoxColor } from "@/lib/model/disease-info"
+import { getBoundingBoxColor } from "@/lib/model/disease/info"
 
 export type DetectionOverlayProps = {
     imageUri: string

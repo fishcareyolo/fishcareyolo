@@ -1,7 +1,7 @@
 import React from "react"
 import { Pressable, View } from "react-native"
 import type { Detection } from "@/lib/model/types"
-import { getDiseaseInfo } from "@/lib/model/disease-info"
+import { getDiseaseInfo } from "@/lib/model/disease/info"
 import { Text } from "@/components/ui/text"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 

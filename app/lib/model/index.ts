@@ -88,7 +88,7 @@ export {
     getAllDiseaseInfo,
     getBoundingBoxColor,
     getDiseaseInfo,
-} from "@/lib/model/disease-info"
+} from "@/lib/model/disease/info"
 
 // React context
 export { ModelProvider, useModel } from "@/lib/model/context"

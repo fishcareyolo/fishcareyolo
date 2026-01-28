@@ -6,7 +6,7 @@ import {
     getAllDiseaseInfo,
     getBoundingBoxColor,
     getDiseaseInfo,
-} from "@/lib/model/disease-info"
+} from "@/lib/model/disease/info"
 
 describe("**Feature: fish-disease-detection, Property 6: Disease info completeness**", () => {
     describe("DISEASE_INFO completeness", () => {

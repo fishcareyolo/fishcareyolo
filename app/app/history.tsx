@@ -12,10 +12,7 @@ import { Icon } from "@/components/ui/icon"
 import { Text } from "@/components/ui/text"
 import { getHistoryItems } from "@/lib/history/storage"
 import type { HistoryItem } from "@/lib/history/types"
-import {
-    getBoundingBoxColor,
-    getDiseaseLabel,
-} from "@/lib/model/disease/info"
+import { getBoundingBoxColor, getDiseaseLabel } from "@/lib/model/disease/info"
 
 export default function HistoryScreen() {
     const router = useRouter()
