@@ -369,12 +369,14 @@ export default function ResultsScreen() {
                     <Button
                         className="flex-1 h-12"
                         onPress={() => {
-                            // TODO: Navigate to disease info or treatment recommendations
-                            // Currently we don't have a details page, so just log
-                            console.log(
-                                "View details for detections:",
-                                results.detections,
-                            )
+                            // Navigate to disease info for the top detection
+                            const topDetection = results.detections[0]
+                            router.push({
+                                pathname: "/disease-info",
+                                params: {
+                                    diseaseClass: topDetection.diseaseClass,
+                                },
+                            })
                         }}
                         disabled={isAnalyzing}
                     >
