@@ -10,7 +10,8 @@ import {
     type TensorflowModel,
 } from "react-native-fast-tflite"
 import * as ImageManipulator from "expo-image-manipulator"
-import * as FileSystem from "expo-file-system"
+import * as FileSystem from "expo-file-system/legacy"
+import { Skia } from "@shopify/react-native-skia"
 import { DISEASE_CLASSES } from "@/lib/model/types"
 import type { BoundingBox, Detection, DiseaseClass } from "@/lib/model/types"
 
@@ -252,48 +253,61 @@ export function disposeModel(): void {
 /**
  * Preprocess image for model input.
  *
- * NOTE: This is a simplified implementation. For production use, we need proper
- * image decoding to RGB tensor. Options:
- * 1. Use vision-camera-resize-plugin with VisionCamera integration
- * 2. Create native module for image decoding
- * 3. Use expo-gl or react-native-skia for pixel access
- *
- * For now, we create a placeholder tensor that simulates the expected input format.
- * This allows the rest of the inference pipeline to be tested.
+ * Decodes the image to RGB pixel data using react-native-skia.
+ * 1. Resize image to 640x640 using expo-image-manipulator
+ * 2. Load image with Skia and decode to RGBA pixels
+ * 3. Convert RGBA to RGB by dropping alpha channel
  *
  * @param imageUri - URI to the image file
- * @returns Placeholder RGB tensor (640x640x3)
+ * @returns RGB tensor (640x640x3) as Uint8Array
  */
 async function preprocessImage(imageUri: string): Promise<Uint8Array> {
     try {
-        // Resize image to 640x640
+        // Step 1: Resize image to 640x640
         const resized = await ImageManipulator.manipulateAsync(
             imageUri,
             [{ resize: { width: IMAGE_SIZE, height: IMAGE_SIZE } }],
             {
-                compress: 0.9,
-                format: ImageManipulator.SaveFormat.JPEG,
+                compress: 1.0,
+                format: ImageManipulator.SaveFormat.PNG,
             },
         )
 
-        // TODO: Decode image to RGB pixel data
-        // For now, create a placeholder tensor filled with gray values
-        // This won't produce meaningful results but allows testing the pipeline
-        const tensorSize = IMAGE_SIZE * IMAGE_SIZE * 3
-        const tensor = new Uint8Array(tensorSize)
+        // Step 2: Read image file as base64
+        const base64 = await FileSystem.readAsStringAsync(resized.uri, {
+            encoding: "base64",
+        })
 
-        // Fill with gray color (128, 128, 128) for testing
-        for (let i = 0; i < tensorSize; i++) {
-            tensor[i] = 128
+        // Step 3: Decode image with Skia
+        const imageData = Skia.Data.fromBase64(base64)
+        const image = Skia.Image.MakeImageFromEncoded(imageData)
+
+        if (!image) {
+            throw new Error("Failed to decode image with Skia")
         }
 
-        console.warn(
-            "WARNING: Using placeholder image tensor. " +
-                "Proper image decoding not yet implemented. " +
-                "Results will not be meaningful until image preprocessing is completed.",
-        )
+        // Step 4: Read pixels as RGBA (returns Uint8Array with 4 bytes per pixel)
+        const pixels = image.readPixels()
+        if (!pixels) {
+            throw new Error("Failed to read pixels from image")
+        }
 
-        return tensor
+        // Step 5: Convert RGBA to RGB by dropping alpha channel
+        // YOLO expects RGB format (3 channels)
+        const tensorSize = IMAGE_SIZE * IMAGE_SIZE * 3
+        const rgbTensor = new Uint8Array(tensorSize)
+
+        for (let i = 0; i < IMAGE_SIZE * IMAGE_SIZE; i++) {
+            const rgbaIndex = i * 4
+            const rgbIndex = i * 3
+
+            rgbTensor[rgbIndex] = pixels[rgbaIndex] // R
+            rgbTensor[rgbIndex + 1] = pixels[rgbaIndex + 1] // G
+            rgbTensor[rgbIndex + 2] = pixels[rgbaIndex + 2] // B
+            // Skip alpha channel (pixels[rgbaIndex + 3])
+        }
+
+        return rgbTensor
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(`Failed to preprocess image: ${message}`)
