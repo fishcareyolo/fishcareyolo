@@ -36,17 +36,16 @@ jobs:
           if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
             echo "IS_PR=true" >> $GITHUB_OUTPUT
             if [[ -z "$COMMIT_HASH" ]]; then
-              echo "REF=refs/pull/${{ github.event.issue.number }}/head" >> $GITHUB_OUTPUT
+              echo "USE_PR_REF=true" >> $GITHUB_OUTPUT
             else
-              echo "REF=$COMMIT_HASH" >> $GITHUB_OUTPUT
+              echo "USE_PR_REF=false" >> $GITHUB_OUTPUT
             fi
           else
             echo "IS_PR=false" >> $GITHUB_OUTPUT
+            echo "USE_PR_REF=false" >> $GITHUB_OUTPUT
             if [[ -z "$COMMIT_HASH" ]]; then
               echo "ERROR=true" >> $GITHUB_OUTPUT
-              echo "REF=" >> $GITHUB_OUTPUT
             else
-              echo "REF=$COMMIT_HASH" >> $GITHUB_OUTPUT
               echo "ERROR=false" >> $GITHUB_OUTPUT
             fi
           fi
@@ -66,12 +65,23 @@ jobs:
             })
             core.setFailed('Missing commit hash for regular issue')
       
-      - name: Checkout Code
-        if: steps.params.outputs.ERROR != 'true'
+      - name: Checkout PR Code
+        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.params.outputs.REF }}
+          ref: refs/pull/${{ github.event.issue.number }}/head
           fetch-depth: 0
+      
+      - name: Checkout Commit Hash
+        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Checkout Specific Commit
+        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF != 'true'
+        run: |
+          git checkout ${{ steps.params.outputs.COMMIT_HASH }}
       
       - name: Get Commit Info
         if: steps.params.outputs.ERROR != 'true'
