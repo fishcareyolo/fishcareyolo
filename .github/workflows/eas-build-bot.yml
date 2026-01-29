@@ -1,19 +1,23 @@
 name: EAS Build Bot (Local)
+
 on:
   issue_comment:
     types: [created]
+
 jobs:
   build:
     name: Trigger EAS Local Build
     if: |
       startsWith(github.event.comment.body, '/build') &&
       github.event.comment.user.login == 'aquaticcalf'
+
     runs-on: blacksmith-2vcpu-ubuntu-2404
+
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
-    
+
     steps:
       - name: Acknowledge Command
         uses: actions/github-script@v6
@@ -25,33 +29,25 @@ jobs:
               repo: context.repo.repo,
               body: 'Command received. Initializing local build sequence...'
             })
-      
+
       - name: Parse Build Parameters
         id: params
         run: |
           COMMENT="${{ github.event.comment.body }}"
-          
+
           COMMIT_HASH=$(echo "$COMMENT" | grep -oP '/build\s+\K[a-f0-9]{6,40}' || echo "")
-          
+
           if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
             echo "IS_PR=true" >> $GITHUB_OUTPUT
-            if [[ -z "$COMMIT_HASH" ]]; then
-              echo "USE_PR_REF=true" >> $GITHUB_OUTPUT
-            else
-              echo "USE_PR_REF=false" >> $GITHUB_OUTPUT
-            fi
+            [[ -z "$COMMIT_HASH" ]] && echo "USE_PR_REF=true" >> $GITHUB_OUTPUT || echo "USE_PR_REF=false" >> $GITHUB_OUTPUT
           else
             echo "IS_PR=false" >> $GITHUB_OUTPUT
             echo "USE_PR_REF=false" >> $GITHUB_OUTPUT
-            if [[ -z "$COMMIT_HASH" ]]; then
-              echo "ERROR=true" >> $GITHUB_OUTPUT
-            else
-              echo "ERROR=false" >> $GITHUB_OUTPUT
-            fi
+            [[ -z "$COMMIT_HASH" ]] && echo "ERROR=true" >> $GITHUB_OUTPUT || echo "ERROR=false" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_OUTPUT
-      
+
       - name: Check Parameters
         if: steps.params.outputs.ERROR == 'true'
         uses: actions/github-script@v6
@@ -63,163 +59,127 @@ jobs:
               repo: context.repo.repo,
               body: 'Error: For regular issues, you must specify a commit hash.\n\nUsage: `/build <commit-hash>` or `/build <commit-hash> prod`'
             })
-            core.setFailed('Missing commit hash for regular issue')
-      
+            core.setFailed('Missing commit hash')
+
       - name: Checkout PR Code
-        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF == 'true'
+        if: steps.params.outputs.USE_PR_REF == 'true'
         uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.issue.number }}/head
           fetch-depth: 0
-      
-      - name: Checkout Commit Hash
-        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF != 'true'
+
+      - name: Checkout Commit
+        if: steps.params.outputs.USE_PR_REF != 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Checkout Specific Commit
-        if: steps.params.outputs.ERROR != 'true' && steps.params.outputs.USE_PR_REF != 'true'
-        run: |
-          git checkout ${{ steps.params.outputs.COMMIT_HASH }}
-      
+        if: steps.params.outputs.USE_PR_REF != 'true'
+        run: git checkout ${{ steps.params.outputs.COMMIT_HASH }}
+
       - name: Get Commit Info
-        if: steps.params.outputs.ERROR != 'true'
         id: commit
         run: |
-          COMMIT_SHA=$(git rev-parse HEAD)
-          COMMIT_SHORT=$(git rev-parse --short HEAD)
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          
-          echo "SHA=$COMMIT_SHA" >> $GITHUB_OUTPUT
-          echo "SHORT=$COMMIT_SHORT" >> $GITHUB_OUTPUT
-          echo "MESSAGE<<EOF" >> $GITHUB_OUTPUT
-          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      
+          echo "SHA=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Setup Java
-        if: steps.params.outputs.ERROR != 'true'
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-      
+
       - name: Setup Android SDK
-        if: steps.params.outputs.ERROR != 'true'
         uses: android-actions/setup-android@v3
-      
+
       - name: Setup Bun
-        if: steps.params.outputs.ERROR != 'true'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-      
-      - name: Setup EAS CLI
-        if: steps.params.outputs.ERROR != 'true'
+
+      - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      
+
       - name: Install Dependencies
-        if: steps.params.outputs.ERROR != 'true'
         working-directory: ./app
         run: bun install
-      
+
       - name: Determine Profile
-        if: steps.params.outputs.ERROR != 'true'
         id: profile
         run: |
           if [[ "${{ github.event.comment.body }}" == *"prod"* ]]; then
-            echo "PROFILE=production" >> $GITHUB_OUTPUT
-            echo "PLATFORM=android" >> $GITHUB_OUTPUT
+            echo "PROFILE=production-apk" >> $GITHUB_OUTPUT
+            echo "APK_NAME=app/prod.apk" >> $GITHUB_OUTPUT
           else
             echo "PROFILE=development" >> $GITHUB_OUTPUT
-            echo "PLATFORM=android" >> $GITHUB_OUTPUT
+            echo "APK_NAME=app/dev.apk" >> $GITHUB_OUTPUT
           fi
-      
-      - name: Create Artifacts Directory
-        if: steps.params.outputs.ERROR != 'true'
-        run: |
-          mkdir -p ${{ github.workspace }}/artifacts
-      
+
+          echo "PLATFORM=android" >> $GITHUB_OUTPUT
+
+      - name: Prepare Artifact Directory
+        run: mkdir -p ${{ github.workspace }}/artifacts/app
+
       - name: Run EAS Local Build
-        if: steps.params.outputs.ERROR != 'true'
         id: eas
         working-directory: ./app
         env:
           EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
-          EAS_LOCAL_BUILD_SKIP_CLEANUP: 0
         run: |
-          echo "Starting local build for ${{ steps.profile.outputs.PROFILE }}..."
-          
-          # Run local build with --local flag
+          OUTPUT_PATH="${{ github.workspace }}/artifacts/${{ steps.profile.outputs.APK_NAME }}"
+
           eas build \
             --profile ${{ steps.profile.outputs.PROFILE }} \
-            --platform ${{ steps.profile.outputs.PLATFORM }} \
+            --platform android \
             --local \
             --non-interactive \
-            --output ${{ github.workspace }}/artifacts/app-build.apk
-          
-          echo "Build completed successfully"
-          
-          # List artifacts
-          ls -lh ${{ github.workspace }}/artifacts/
-          
-          # Get artifact info
-          APK_SIZE=$(du -h ${{ github.workspace }}/artifacts/app-build.apk | cut -f1)
+            --output "$OUTPUT_PATH"
+
+          APK_SIZE=$(du -h "$OUTPUT_PATH" | cut -f1)
+          echo "APK_PATH=$OUTPUT_PATH" >> $GITHUB_OUTPUT
           echo "APK_SIZE=$APK_SIZE" >> $GITHUB_OUTPUT
-          echo "APK_PATH=${{ github.workspace }}/artifacts/app-build.apk" >> $GITHUB_OUTPUT
-      
-      - name: Upload Build Artifact
-        if: success() && steps.params.outputs.ERROR != 'true'
-        uses: actions/upload-artifact@v4
+
+      - name: Publish to Release (app)
+        uses: softprops/action-gh-release@v2
         with:
-          name: android-build-${{ steps.commit.outputs.SHORT }}-${{ steps.profile.outputs.PROFILE }}
-          path: ${{ github.workspace }}/artifacts/app-build.apk
-          retention-days: 30
-      
+          tag_name: app
+          name: App Builds
+          files: ${{ steps.eas.outputs.APK_PATH }}
+          overwrite: true
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Report Success
-        if: success() && steps.params.outputs.ERROR != 'true'
         uses: actions/github-script@v6
         with:
           script: |
-            const profile = '${{ steps.profile.outputs.PROFILE }}';
-            const commitSha = '${{ steps.commit.outputs.SHA }}';
-            const commitShort = '${{ steps.commit.outputs.SHORT }}';
-            const isPR = '${{ steps.params.outputs.IS_PR }}' === 'true';
-            const apkSize = '${{ steps.eas.outputs.APK_SIZE }}';
-            const runId = context.runId;
-            const artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
-            
-            let body = `**Local build completed successfully!**\n\n`;
-            body += `**Profile:** ${profile}\n`;
-            body += `**Commit:** \`${commitShort}\` (\`${commitSha}\`)\n`;
-            if (isPR) {
-              body += `**Source:** Pull Request #${{ github.event.issue.number }}\n`;
-            }
-            body += `**APK Size:** ${apkSize}\n`;
-            body += `**Download:** [View Artifacts](${artifactUrl})\n\n`;
-            body += `The build artifact will be available for 30 days.`;
-            
+            const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/app`
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: body
+              body:
+                `**Local build completed successfully**\n\n` +
+                `**Profile:** ${{ steps.profile.outputs.PROFILE }}\n` +
+                `**Commit:** \`${{ steps.commit.outputs.SHORT }}\`\n` +
+                `**APK Size:** ${{ steps.eas.outputs.APK_SIZE }}\n` +
+                `**Download:** ${url}`
             })
-      
+
       - name: Report Failure
-        if: failure() && steps.params.outputs.ERROR != 'true'
+        if: failure()
         uses: actions/github-script@v6
         with:
           script: |
-            const runId = context.runId;
-            const logsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
-            
+            const url = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `**Local build failed.**\n\nPlease check the [action logs](${logsUrl}) for details.`
+              body: `**Local build failed.**\n\nLogs: ${url}`
             })
