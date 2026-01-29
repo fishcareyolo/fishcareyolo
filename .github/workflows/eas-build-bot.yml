@@ -1,0 +1,104 @@
+name: EAS Build Bot
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  build:
+    name: Trigger EAS Build
+    # Only run if comment starts with /build AND user is the OWNER
+    if: |
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/build') &&
+      github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Acknowledge Command
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Command received. Initializing build sequence...'
+            })
+
+      - name: Checkout PR Code
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install Dependencies
+        working-directory: ./app
+        run: bun install
+
+      - name: Determine Profile
+        id: profile
+        run: |
+          if [[ "${{ github.event.comment.body }}" == *"/build prod"* ]]; then
+            echo "PROFILE=production" >> $GITHUB_OUTPUT
+            echo "PLATFORM=android" >> $GITHUB_OUTPUT
+          else
+            echo "PROFILE=development" >> $GITHUB_OUTPUT
+            echo "PLATFORM=android" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run EAS Build
+        id: eas
+        working-directory: ./app
+        env:
+          EAS_NO_VCS: 1
+        run: |
+          echo "Starting build for ${{ steps.profile.outputs.PROFILE }}..."
+          
+          # Run EAS Build
+          eas build --profile ${{ steps.profile.outputs.PROFILE }} --platform ${{ steps.profile.outputs.PLATFORM }} --non-interactive --json > build-output.json
+          
+          # Extract URL
+          BUILD_URL=$(jq -r '.[0].buildDetailsPageUrl' build-output.json)
+          echo "BUILD_URL=$BUILD_URL" >> $GITHUB_OUTPUT
+
+      - name: Report Success
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const buildUrl = '${{ steps.eas.outputs.BUILD_URL }}';
+            const profile = '${{ steps.profile.outputs.PROFILE }}';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `Build dispatched successfully.\n\nProfile: ${profile}\nDashboard: ${buildUrl}`
+            })
+
+      - name: Report Failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Build dispatch failed. Please check the action logs.'
+            })

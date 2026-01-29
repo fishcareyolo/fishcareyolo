@@ -5,12 +5,23 @@
  * Non-Maximum Suppression (NMS) to filter overlapping detections.
  */
 
+import {
+    loadTensorflowModel,
+    type TensorflowModel,
+} from "react-native-fast-tflite"
+import * as ImageManipulator from "expo-image-manipulator"
+import * as FileSystem from "expo-file-system/legacy"
+import { Skia } from "@shopify/react-native-skia"
 import { DISEASE_CLASSES } from "@/lib/model/types"
 import type { BoundingBox, Detection, DiseaseClass } from "@/lib/model/types"
 
 const IMAGE_SIZE = 640
 const CONFIDENCE_THRESHOLD = 0.3
 const IOU_THRESHOLD = 0.45
+
+// Cached model instance to avoid reloading
+let cachedModel: TensorflowModel | null = null
+let cachedModelPath: string | null = null
 
 interface RawDetection {
     classIndex: number
@@ -193,4 +204,173 @@ export interface InferenceResult {
     inferenceTimeMs: number
 }
 
-const NUM_ANCHORS = 8400
+/**
+ * Load TFLite model from file path.
+ * Model is cached to avoid reloading on subsequent calls.
+ *
+ * @param modelPath - Local file path to the TFLite model
+ * @returns Loaded TensorflowModel instance
+ */
+export async function loadModel(modelPath: string): Promise<TensorflowModel> {
+    // Return cached model if already loaded for this path
+    if (cachedModel && cachedModelPath === modelPath) {
+        return cachedModel
+    }
+
+    // Load new model
+    try {
+        const model = await loadTensorflowModel({
+            url: `file://${modelPath}`,
+        })
+        cachedModel = model
+        cachedModelPath = modelPath
+        return model
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Failed to load TFLite model: ${message}`)
+    }
+}
+
+/**
+ * Check if a model is currently loaded and cached.
+ *
+ * @returns True if model is loaded
+ */
+export function isModelLoaded(): boolean {
+    return cachedModel !== null
+}
+
+/**
+ * Dispose of the cached model and free resources.
+ */
+export function disposeModel(): void {
+    cachedModel = null
+    cachedModelPath = null
+}
+
+/**
+ * Preprocess image for model input.
+ *
+ * Decodes the image to RGB pixel data using react-native-skia.
+ * 1. Resize image to 640x640 using expo-image-manipulator
+ * 2. Load image with Skia and decode to RGBA pixels
+ * 3. Convert RGBA to RGB by dropping alpha channel
+ *
+ * @param imageUri - URI to the image file
+ * @returns RGB tensor (640x640x3) as Uint8Array
+ */
+async function preprocessImage(imageUri: string): Promise<Uint8Array> {
+    try {
+        // Step 1: Resize image to 640x640
+        const resized = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: IMAGE_SIZE, height: IMAGE_SIZE } }],
+            {
+                compress: 1.0,
+                format: ImageManipulator.SaveFormat.PNG,
+            },
+        )
+
+        // Step 2: Read image file as base64
+        const base64 = await FileSystem.readAsStringAsync(resized.uri, {
+            encoding: "base64",
+        })
+
+        // Step 3: Decode image with Skia
+        const imageData = Skia.Data.fromBase64(base64)
+        const image = Skia.Image.MakeImageFromEncoded(imageData)
+
+        if (!image) {
+            throw new Error("Failed to decode image with Skia")
+        }
+
+        // Step 4: Read pixels as RGBA (returns Uint8Array with 4 bytes per pixel)
+        const pixels = image.readPixels()
+        if (!pixels) {
+            throw new Error("Failed to read pixels from image")
+        }
+
+        // Step 5: Convert RGBA to RGB by dropping alpha channel
+        // YOLO expects RGB format (3 channels)
+        const tensorSize = IMAGE_SIZE * IMAGE_SIZE * 3
+        const rgbTensor = new Uint8Array(tensorSize)
+
+        for (let i = 0; i < IMAGE_SIZE * IMAGE_SIZE; i++) {
+            const rgbaIndex = i * 4
+            const rgbIndex = i * 3
+
+            rgbTensor[rgbIndex] = pixels[rgbaIndex] // R
+            rgbTensor[rgbIndex + 1] = pixels[rgbaIndex + 1] // G
+            rgbTensor[rgbIndex + 2] = pixels[rgbaIndex + 2] // B
+            // Skip alpha channel (pixels[rgbaIndex + 3])
+        }
+
+        return rgbTensor
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Failed to preprocess image: ${message}`)
+    }
+}
+
+/**
+ * Run inference on an image using the TFLite model.
+ *
+ * @param imageUri - URI to the image file
+ * @param modelPath - Local file path to the TFLite model
+ * @returns Inference result with detections and timing
+ */
+export async function runInference(
+    imageUri: string,
+    modelPath: string,
+): Promise<InferenceResult> {
+    const startTime = Date.now()
+
+    try {
+        // Step 1: Load model
+        const model = await loadModel(modelPath)
+
+        // Step 2: Preprocess image
+        const inputTensor = await preprocessImage(imageUri)
+
+        // Step 3: Run model inference
+        const outputs = model.runSync([inputTensor])
+
+        // Step 4: Parse YOLO output
+        // The model outputs raw detections in YOLO format
+        const rawOutput = outputs[0] as Float32Array
+        const rawDetections = parseYolov8Output(
+            rawOutput,
+            IMAGE_SIZE,
+            IMAGE_SIZE,
+        )
+
+        // Step 5: Apply NMS to remove overlapping boxes
+        const nmsDetections = applyNMS(rawDetections, IOU_THRESHOLD)
+
+        // Step 6: Filter by confidence threshold
+        const filteredDetections = filterByConfidence(
+            nmsDetections,
+            CONFIDENCE_THRESHOLD,
+        )
+
+        // Step 7: Sort by confidence (descending)
+        const sortedDetections = sortByConfidence(filteredDetections)
+
+        // Step 8: Convert to Detection objects
+        const detections = convertToDetections(
+            sortedDetections,
+            IMAGE_SIZE,
+            IMAGE_SIZE,
+        )
+
+        const inferenceTimeMs = Date.now() - startTime
+
+        return {
+            detections,
+            inferenceTimeMs,
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        throw new Error(`Inference failed: ${message}`)
+    }
+}
