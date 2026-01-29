@@ -1,10 +1,10 @@
-name: EAS Build Bot
+name: EAS Build Bot (Local)
 on:
   issue_comment:
     types: [created]
 jobs:
   build:
-    name: Trigger EAS Build
+    name: Trigger EAS Local Build
     if: |
       startsWith(github.event.comment.body, '/build') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.comment.author_association)
@@ -23,7 +23,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Command received. Initializing build sequence...'
+              body: 'Command received. Initializing local build sequence...'
             })
       
       - name: Parse Build Parameters
@@ -97,13 +97,30 @@ jobs:
           echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
       
+      - name: Setup Java
+        if: steps.params.outputs.ERROR != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
+        if: steps.params.outputs.ERROR != 'true'
+        uses: android-actions/setup-android@v3
+      
+      - name: Setup Node.js
+        if: steps.params.outputs.ERROR != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
       - name: Setup Bun
         if: steps.params.outputs.ERROR != 'true'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
       
-      - name: Setup EAS
+      - name: Setup EAS CLI
         if: steps.params.outputs.ERROR != 'true'
         uses: expo/expo-github-action@v8
         with:
@@ -127,38 +144,69 @@ jobs:
             echo "PLATFORM=android" >> $GITHUB_OUTPUT
           fi
       
-      - name: Run EAS Build
+      - name: Create Artifacts Directory
+        if: steps.params.outputs.ERROR != 'true'
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+      
+      - name: Run EAS Local Build
         if: steps.params.outputs.ERROR != 'true'
         id: eas
         working-directory: ./app
         env:
-          EAS_NO_VCS: 1
+          EAS_LOCAL_BUILD_ARTIFACTS_DIR: ${{ github.workspace }}/artifacts
+          EAS_LOCAL_BUILD_SKIP_CLEANUP: 0
         run: |
-          echo "Starting build for ${{ steps.profile.outputs.PROFILE }}..."
+          echo "Starting local build for ${{ steps.profile.outputs.PROFILE }}..."
           
-          eas build --profile ${{ steps.profile.outputs.PROFILE }} --platform ${{ steps.profile.outputs.PLATFORM }} --non-interactive --json > build-output.json
+          # Run local build with --local flag
+          eas build \
+            --profile ${{ steps.profile.outputs.PROFILE }} \
+            --platform ${{ steps.profile.outputs.PLATFORM }} \
+            --local \
+            --non-interactive \
+            --output ${{ github.workspace }}/artifacts/app-build.apk
           
-          BUILD_URL=$(jq -r '.[0].buildDetailsPageUrl' build-output.json)
-          echo "BUILD_URL=$BUILD_URL" >> $GITHUB_OUTPUT
+          echo "Build completed successfully"
+          
+          # List artifacts
+          ls -lh ${{ github.workspace }}/artifacts/
+          
+          # Get artifact info
+          APK_SIZE=$(du -h ${{ github.workspace }}/artifacts/app-build.apk | cut -f1)
+          echo "APK_SIZE=$APK_SIZE" >> $GITHUB_OUTPUT
+          echo "APK_PATH=${{ github.workspace }}/artifacts/app-build.apk" >> $GITHUB_OUTPUT
+      
+      - name: Upload Build Artifact
+        if: success() && steps.params.outputs.ERROR != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-${{ steps.commit.outputs.SHORT }}-${{ steps.profile.outputs.PROFILE }}
+          path: ${{ github.workspace }}/artifacts/app-build.apk
+          retention-days: 30
       
       - name: Report Success
         if: success() && steps.params.outputs.ERROR != 'true'
         uses: actions/github-script@v6
         with:
           script: |
-            const buildUrl = '${{ steps.eas.outputs.BUILD_URL }}';
             const profile = '${{ steps.profile.outputs.PROFILE }}';
             const commitSha = '${{ steps.commit.outputs.SHA }}';
             const commitShort = '${{ steps.commit.outputs.SHORT }}';
             const isPR = '${{ steps.params.outputs.IS_PR }}' === 'true';
+            const apkSize = '${{ steps.eas.outputs.APK_SIZE }}';
+            const runId = context.runId;
+            const artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
             
-            let body = `Build dispatched successfully.\n\n`;
-            body += `Profile: ${profile}\n`;
-            body += `Commit: ${commitShort} (${commitSha})\n`;
+            let body = `**Local build completed successfully!**\n\n`;
+            body += `**Profile:** ${profile}\n`;
+            body += `**Commit:** \`${commitShort}\` (\`${commitSha}\`)\n`;
             if (isPR) {
-              body += `Source: Pull Request #${{ github.event.issue.number }}\n`;
+              body += `**Source:** Pull Request #${{ github.event.issue.number }}\n`;
             }
-            body += `Dashboard: ${buildUrl}`;
+            body += `**APK Size:** ${apkSize}\n`;
+            body += `**Download:** [View Artifacts](${artifactUrl})\n\n`;
+            body += `The build artifact will be available for 30 days.`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -172,9 +220,12 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
+            const runId = context.runId;
+            const logsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`;
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Build dispatch failed. Please check the action logs.'
+              body: `**Local build failed.**\n\nPlease check the [action logs](${logsUrl}) for details.`
             })
