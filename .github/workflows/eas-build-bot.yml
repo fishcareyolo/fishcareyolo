@@ -11,7 +11,7 @@ jobs:
       startsWith(github.event.comment.body, '/build') &&
       github.event.comment.user.login == 'aquaticcalf'
 
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
 
     permissions:
       contents: write
@@ -149,7 +149,7 @@ jobs:
           tag_name: app
           name: App Builds
           files: ${{ steps.eas.outputs.APK_PATH }}
-          overwrite: true
+          overwrite_files: true
           make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
