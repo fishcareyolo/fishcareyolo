@@ -1,17 +1,13 @@
 name: EAS Build Bot
-
 on:
   issue_comment:
     types: [created]
-
 jobs:
   build:
     name: Trigger EAS Build
-    # Only run if comment starts with /build AND user is the OWNER
     if: |
-      github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/build') &&
-       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.comment.author_association)
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,39 +25,100 @@ jobs:
               repo: context.repo.repo,
               body: 'Command received. Initializing build sequence...'
             })
-
-      - name: Checkout PR Code
+      
+      - name: Parse Build Parameters
+        id: params
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          
+          COMMIT_HASH=$(echo "$COMMENT" | grep -oP '/build\s+\K[a-f0-9]{6,40}' || echo "")
+          
+          if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
+            echo "IS_PR=true" >> $GITHUB_OUTPUT
+            if [[ -z "$COMMIT_HASH" ]]; then
+              echo "REF=refs/pull/${{ github.event.issue.number }}/head" >> $GITHUB_OUTPUT
+            else
+              echo "REF=$COMMIT_HASH" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "IS_PR=false" >> $GITHUB_OUTPUT
+            if [[ -z "$COMMIT_HASH" ]]; then
+              echo "ERROR=true" >> $GITHUB_OUTPUT
+              echo "REF=" >> $GITHUB_OUTPUT
+            else
+              echo "REF=$COMMIT_HASH" >> $GITHUB_OUTPUT
+              echo "ERROR=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+          echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_OUTPUT
+      
+      - name: Check Parameters
+        if: steps.params.outputs.ERROR == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Error: For regular issues, you must specify a commit hash.\n\nUsage: `/build <commit-hash>` or `/build <commit-hash> prod`'
+            })
+            core.setFailed('Missing commit hash for regular issue')
+      
+      - name: Checkout Code
+        if: steps.params.outputs.ERROR != 'true'
         uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
-
+          ref: ${{ steps.params.outputs.REF }}
+          fetch-depth: 0
+      
+      - name: Get Commit Info
+        if: steps.params.outputs.ERROR != 'true'
+        id: commit
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_SHORT=$(git rev-parse --short HEAD)
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          
+          echo "SHA=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          echo "SHORT=$COMMIT_SHORT" >> $GITHUB_OUTPUT
+          echo "MESSAGE<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
       - name: Setup Bun
+        if: steps.params.outputs.ERROR != 'true'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-
+      
       - name: Setup EAS
+        if: steps.params.outputs.ERROR != 'true'
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-
+      
       - name: Install Dependencies
+        if: steps.params.outputs.ERROR != 'true'
         working-directory: ./app
         run: bun install
-
+      
       - name: Determine Profile
+        if: steps.params.outputs.ERROR != 'true'
         id: profile
         run: |
-          if [[ "${{ github.event.comment.body }}" == *"/build prod"* ]]; then
+          if [[ "${{ github.event.comment.body }}" == *"prod"* ]]; then
             echo "PROFILE=production" >> $GITHUB_OUTPUT
             echo "PLATFORM=android" >> $GITHUB_OUTPUT
           else
             echo "PROFILE=development" >> $GITHUB_OUTPUT
             echo "PLATFORM=android" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Run EAS Build
+        if: steps.params.outputs.ERROR != 'true'
         id: eas
         working-directory: ./app
         env:
@@ -69,30 +126,39 @@ jobs:
         run: |
           echo "Starting build for ${{ steps.profile.outputs.PROFILE }}..."
           
-          # Run EAS Build
           eas build --profile ${{ steps.profile.outputs.PROFILE }} --platform ${{ steps.profile.outputs.PLATFORM }} --non-interactive --json > build-output.json
           
-          # Extract URL
           BUILD_URL=$(jq -r '.[0].buildDetailsPageUrl' build-output.json)
           echo "BUILD_URL=$BUILD_URL" >> $GITHUB_OUTPUT
-
+      
       - name: Report Success
-        if: success()
+        if: success() && steps.params.outputs.ERROR != 'true'
         uses: actions/github-script@v6
         with:
           script: |
             const buildUrl = '${{ steps.eas.outputs.BUILD_URL }}';
             const profile = '${{ steps.profile.outputs.PROFILE }}';
+            const commitSha = '${{ steps.commit.outputs.SHA }}';
+            const commitShort = '${{ steps.commit.outputs.SHORT }}';
+            const isPR = '${{ steps.params.outputs.IS_PR }}' === 'true';
+            
+            let body = `Build dispatched successfully.\n\n`;
+            body += `Profile: ${profile}\n`;
+            body += `Commit: ${commitShort} (${commitSha})\n`;
+            if (isPR) {
+              body += `Source: Pull Request #${{ github.event.issue.number }}\n`;
+            }
+            body += `Dashboard: ${buildUrl}`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `Build dispatched successfully.\n\nProfile: ${profile}\nDashboard: ${buildUrl}`
+              body: body
             })
-
+      
       - name: Report Failure
-        if: failure()
+        if: failure() && steps.params.outputs.ERROR != 'true'
         uses: actions/github-script@v6
         with:
           script: |
