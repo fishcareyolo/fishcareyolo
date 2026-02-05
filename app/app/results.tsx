@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router"
 import React, { useEffect, useState, useRef } from "react"
-import { ActivityIndicator, ScrollView, View } from "react-native"
+import { ScrollView, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "expo-image"
 import { useNavigation } from "@react-navigation/native"
@@ -45,7 +45,6 @@ export default function ResultsScreen() {
 
     useEffect(() => {
         async function load() {
-            // Case 1: Load existing history item
             if (historyId) {
                 try {
                     setIsAnalyzing(true)
@@ -53,27 +52,25 @@ export default function ResultsScreen() {
                     if (item) {
                         setResults(item.results)
                         setProcessedImageUri(item.processedImageUri)
-                        // We don't need to re-analyze or save
                     } else {
-                        setError("History item not found")
+                        setError("Could not find this scan")
                     }
                 } catch (e) {
-                    setError("Failed to load history item")
+                    setError("Could not load this scan")
                 } finally {
                     setIsAnalyzing(false)
                 }
                 return
             }
 
-            // Case 2: New Analysis
             if (!imageUri) {
-                setError("No image provided")
+                setError("No photo provided")
                 setIsAnalyzing(false)
                 return
             }
 
             if (!isReady) {
-                setError("Model not ready")
+                setError("App is not ready. Please try again.")
                 setIsAnalyzing(false)
                 return
             }
@@ -82,11 +79,10 @@ export default function ResultsScreen() {
                 setIsAnalyzing(true)
                 setError(null)
 
-                // 1. Run Inference
                 const result = await runInference(imageUri)
 
                 if (!result) {
-                    setError("Inference failed - no results returned")
+                    setError("Could not analyze this photo")
                     setIsAnalyzing(false)
                     return
                 }
@@ -95,7 +91,6 @@ export default function ResultsScreen() {
 
                 let finalProcessedUri = imageUri
 
-                // 2. Process Image with Skia (Overlay Bounding Boxes)
                 if (result.detections.length > 0) {
                     try {
                         const processedUri = await processImageWithOverlays(
@@ -105,15 +100,13 @@ export default function ResultsScreen() {
                         setProcessedImageUri(processedUri)
                         finalProcessedUri = processedUri
                     } catch (e) {
-                        console.error("Failed to process image overlays:", e)
-                        // Fallback to original image if overlay processing fails
+                        console.error("Failed to process image:", e)
                         setProcessedImageUri(imageUri)
                     }
                 } else {
                     setProcessedImageUri(imageUri)
                 }
 
-                // 3. Save to History (if not already saved in this session)
                 if (!savedRef.current) {
                     savedRef.current = true
                     try {
@@ -124,7 +117,7 @@ export default function ResultsScreen() {
                             results: result,
                         })
                     } catch (e) {
-                        console.error("Failed to save history:", e)
+                        console.error("Failed to save:", e)
                     }
                 }
             } catch (err) {
@@ -138,43 +131,35 @@ export default function ResultsScreen() {
         load()
     }, [imageUri, historyId, isReady, runInference])
 
-    // Helper to draw overlays and save image
     const processImageWithOverlays = async (
         uri: string,
         result: InferenceResult,
     ): Promise<string> => {
-        // Read original image
         const base64 = await FileSystem.readAsStringAsync(uri, {
             encoding: "base64",
         })
         const imageData = Skia.Data.fromBase64(base64)
         const image = Skia.Image.MakeImageFromEncoded(imageData)
 
-        if (!image)
-            throw new Error("Could not decode image for overlay processing")
+        if (!image) throw new Error("Could not decode image")
 
         const width = image.width()
         const height = image.height()
 
-        // Create Surface/Canvas
         const surface = Skia.Surface.Make(width, height)
-        if (!surface) throw new Error("Could not create Skia surface")
+        if (!surface) throw new Error("Could not create surface")
 
         const canvas = surface.getCanvas()
-
-        // Draw original image
         canvas.drawImage(image, 0, 0)
 
-        // Setup Paint for Bounding Boxes
         const paint = Skia.Paint()
-        paint.setStyle(1) // Stroke
-        paint.setStrokeWidth(4 * (width / 640)) // Scale stroke width relative to image size
+        paint.setStyle(1)
+        paint.setStrokeWidth(4 * (width / 640))
         paint.setAntiAlias(true)
 
-        // Setup Font for Labels
         const fontStyle = {
             fontFamily: "sans-serif",
-            fontSize: 24 * (width / 640), // Scale font size
+            fontSize: 24 * (width / 640),
             fontWeight: "bold" as const,
         }
         const font = matchFont(fontStyle)
@@ -183,34 +168,28 @@ export default function ResultsScreen() {
         textPaint.setColor(Skia.Color("white"))
 
         const bgPaint = Skia.Paint()
-        bgPaint.setStyle(0) // Fill
-        bgPaint.setAlphaf(0.7) // Semi-transparent
+        bgPaint.setStyle(0)
+        bgPaint.setAlphaf(0.7)
 
-        // Draw Detections
         for (const detection of result.detections) {
             const { boundingBox: bbox, diseaseClass, confidence } = detection
 
-            // Convert normalized coordinates to pixel coordinates
             const x = bbox.x * width
             const y = bbox.y * height
             const w = bbox.width * width
             const h = bbox.height * height
 
-            // Get color based on disease class
             const colorHex = getBoundingBoxColor(diseaseClass)
             paint.setColor(Skia.Color(colorHex))
             bgPaint.setColor(Skia.Color(colorHex))
-            bgPaint.setAlphaf(0.7) // Reset alpha as setColor might reset it? (Safety)
+            bgPaint.setAlphaf(0.7)
 
-            // Draw Box
             canvas.drawRect({ x, y, width: w, height: h }, paint)
 
-            // Draw Label
             const label = `${getDiseaseLabel(diseaseClass)} ${(confidence * 100).toFixed(0)}%`
             const textWidth = font.getTextWidth(label)
             const textHeight = font.getSize()
 
-            // Draw Label Background
             const labelBgPadding = 8
             canvas.drawRect(
                 {
@@ -222,7 +201,6 @@ export default function ResultsScreen() {
                 bgPaint,
             )
 
-            // Draw Text
             canvas.drawText(
                 label,
                 x + labelBgPadding,
@@ -232,9 +210,7 @@ export default function ResultsScreen() {
             )
         }
 
-        // Save Result
         const snapshot = surface.makeImageSnapshot()
-        // Use ImageFormat.PNG directly (imported from Skia)
         const resultBase64 = snapshot.encodeToBase64(ImageFormat.PNG, 100)
 
         const filename = `processed_${Date.now()}.png`
@@ -248,24 +224,27 @@ export default function ResultsScreen() {
     }
 
     return (
-        <View className="flex-1 bg-black">
-            <View className="absolute top-0 left-0 right-0 z-10 flex-row justify-center items-center pt-12 px-4">
-                <Text className="text-white font-medium">Analysis Results</Text>
+        <View className="flex-1 bg-background">
+            <View className="pt-14 pb-4 px-5 bg-card border-b border-border">
+                <Text className="text-2xl font-bold text-foreground text-center">
+                    Health Check Results
+                </Text>
             </View>
 
             <ScrollView
                 className="flex-1"
                 contentContainerStyle={{
-                    paddingTop: insets.top + 60,
-                    paddingBottom: insets.bottom + 80,
+                    paddingTop: 20,
+                    paddingBottom: insets.bottom + 100,
+                    paddingHorizontal: 16,
                 }}
                 showsVerticalScrollIndicator={false}
             >
                 {(processedImageUri || imageUri) && (
-                    <View className="items-center justify-center px-4 mb-6">
+                    <View className="items-center justify-center mb-6">
                         <Image
                             source={{ uri: processedImageUri || imageUri }}
-                            className="w-full h-64 rounded-lg"
+                            className="w-full h-64 rounded-xl"
                             contentFit="contain"
                             transition={200}
                         />
@@ -274,91 +253,112 @@ export default function ResultsScreen() {
 
                 {isAnalyzing ? (
                     <View className="items-center justify-center py-12">
-                        <ActivityIndicator size="large" color="#ffffff" />
-                        <Text className="text-white mt-4">
-                            Analyzing fish...
+                        <View className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-4" />
+                        <Text className="text-xl font-bold text-foreground">
+                            Checking your fish...
+                        </Text>
+                        <Text className="text-muted-foreground mt-2">
+                            This will just take a moment
                         </Text>
                     </View>
                 ) : error ? (
                     <View className="items-center justify-center px-6 py-12">
-                        <Text className="text-red-500 text-center text-lg mb-2">
-                            Error
+                        <View className="w-16 h-16 rounded-full bg-destructive/10 items-center justify-center mb-4">
+                            <Text className="text-2xl">❌</Text>
+                        </View>
+                        <Text className="text-xl font-bold text-foreground text-center mb-2">
+                            Something went wrong
                         </Text>
-                        <Text className="text-white text-center">{error}</Text>
+                        <Text className="text-muted-foreground text-center">
+                            {error}
+                        </Text>
+                        <Button
+                            className="mt-6 px-6"
+                            onPress={() => router.push("/")}
+                        >
+                            <Text>Try Again</Text>
+                        </Button>
                     </View>
                 ) : results ? (
-                    <View className="px-4">
-                        <View className="bg-gray-900 rounded-lg p-4 mb-4">
-                            <Text className="text-white text-sm mb-2">
-                                Inference Time:{" "}
-                                <Text className="text-gray-400">
-                                    {results.inferenceTimeMs}ms
-                                </Text>
-                            </Text>
-                            <Text className="text-white text-sm">
-                                Detections Found:{" "}
-                                <Text className="text-gray-400">
-                                    {results.detections.length}
-                                </Text>
-                            </Text>
-                        </View>
-
+                    <View>
                         {results.detections.length === 0 ? (
-                            <View className="bg-green-900/30 border border-green-500/30 rounded-lg p-6 items-center">
-                                <Text className="text-green-400 text-lg font-semibold mb-2">
-                                    Fish Appears Healthy
+                            <View className="bg-green-500/10 border-2 border-green-500/30 rounded-2xl p-6 items-center">
+                                <View className="w-16 h-16 rounded-full bg-green-500/20 items-center justify-center mb-4">
+                                    <Text className="text-3xl">✓</Text>
+                                </View>
+                                <Text className="text-2xl font-bold text-green-600 mb-2 text-center">
+                                    Your Fish Looks Healthy!
                                 </Text>
-                                <Text className="text-gray-300 text-center">
-                                    No diseases detected in the image
+                                <Text className="text-muted-foreground text-center text-base">
+                                    No diseases or problems were found in this
+                                    photo
                                 </Text>
                             </View>
                         ) : (
                             <View>
-                                <Text className="text-white text-lg font-semibold mb-3">
-                                    Detected Issues
+                                <View className="bg-destructive/10 border-2 border-destructive/30 rounded-2xl p-6 mb-6">
+                                    <View className="w-16 h-16 rounded-full bg-destructive/20 items-center justify-center mb-4">
+                                        <Text className="text-3xl">⚠️</Text>
+                                    </View>
+                                    <Text className="text-2xl font-bold text-foreground mb-2">
+                                        Problems Found
+                                    </Text>
+                                    <Text className="text-muted-foreground text-base">
+                                        {results.detections.length === 1
+                                            ? "We found 1 potential issue with your fish"
+                                            : `We found ${results.detections.length} potential issues with your fish`}
+                                    </Text>
+                                </View>
+
+                                <Text className="text-lg font-bold text-foreground mb-4">
+                                    What We Found:
                                 </Text>
-                                {results.detections.map((detection, index) => (
+
+                                {results.detections.map((detection) => (
                                     <View
                                         key={detection.id}
-                                        className="bg-gray-900 rounded-lg p-4 mb-3"
+                                        className="bg-card border-2 border-border rounded-xl p-5 mb-3"
                                     >
-                                        <View className="flex-row justify-between items-start mb-2">
-                                            <Text
-                                                className="text-lg font-semibold"
+                                        <View className="flex-row items-start gap-3 mb-3">
+                                            <View
+                                                className="w-4 h-4 rounded-full mt-1"
                                                 style={{
-                                                    color: getBoundingBoxColor(
-                                                        detection.diseaseClass,
-                                                    ),
+                                                    backgroundColor:
+                                                        getBoundingBoxColor(
+                                                            detection.diseaseClass,
+                                                        ),
                                                 }}
-                                            >
-                                                {getDiseaseLabel(
-                                                    detection.diseaseClass,
-                                                )}
-                                            </Text>
-                                            <Text className="text-white text-lg font-bold">
-                                                {(
-                                                    detection.confidence * 100
-                                                ).toFixed(1)}
-                                                %
-                                            </Text>
+                                            />
+                                            <View className="flex-1">
+                                                <Text className="text-lg font-bold text-foreground">
+                                                    {getDiseaseLabel(
+                                                        detection.diseaseClass,
+                                                    )}
+                                                </Text>
+                                                <Text className="text-base text-muted-foreground mt-1">
+                                                    {(
+                                                        detection.confidence *
+                                                        100
+                                                    ).toFixed(0)}
+                                                    % confident
+                                                </Text>
+                                            </View>
                                         </View>
-                                        <Text className="text-gray-400 text-xs">
-                                            Detection ID: {detection.id}
-                                        </Text>
-                                        <Text className="text-gray-400 text-xs mt-1">
-                                            Location: (
-                                            {detection.boundingBox.x.toFixed(3)}
-                                            ,{" "}
-                                            {detection.boundingBox.y.toFixed(3)}
-                                            ) | Size:{" "}
-                                            {detection.boundingBox.width.toFixed(
-                                                3,
-                                            )}{" "}
-                                            x{" "}
-                                            {detection.boundingBox.height.toFixed(
-                                                3,
-                                            )}
-                                        </Text>
+
+                                        <Button
+                                            variant="outline"
+                                            className="mt-2"
+                                            onPress={() => {
+                                                router.push({
+                                                    pathname: "/disease/[id]",
+                                                    params: {
+                                                        id: detection.diseaseClass,
+                                                    },
+                                                })
+                                            }}
+                                        >
+                                            <Text>Learn More & Treatment</Text>
+                                        </Button>
                                     </View>
                                 ))}
                             </View>
@@ -367,33 +367,15 @@ export default function ResultsScreen() {
                 ) : null}
             </ScrollView>
 
-            <View className="absolute bottom-0 left-0 right-0 flex-row gap-3 px-4 pb-8">
+            <View className="absolute bottom-0 left-0 right-0 px-5 pb-8 pt-4 bg-gradient-to-t from-background to-transparent">
                 <Button
-                    variant="outline"
-                    className="flex-1 h-12"
+                    className="w-full h-14 rounded-xl"
                     onPress={() => router.push("/")}
-                    disabled={isAnalyzing}
                 >
-                    <Text>Done</Text>
+                    <Text className="text-base font-bold">
+                        Check Another Fish
+                    </Text>
                 </Button>
-                {results && results.detections.length > 0 && (
-                    <Button
-                        className="flex-1 h-12"
-                        onPress={() => {
-                            // Navigate to disease info for the top detection
-                            const topDetection = results.detections[0]
-                            router.push({
-                                pathname: "/disease/[id]",
-                                params: {
-                                    id: topDetection.diseaseClass,
-                                },
-                            })
-                        }}
-                        disabled={isAnalyzing}
-                    >
-                        <Text>View Details</Text>
-                    </Button>
-                )}
             </View>
         </View>
     )
