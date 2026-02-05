@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { CheckIcon } from "lucide-react-native"
 import React, { useState, useEffect } from "react"
-import { Pressable, View, Dimensions } from "react-native"
+import { Image as RNImage, Pressable, View, Dimensions } from "react-native"
 import { Image } from "expo-image"
 import * as ImageManipulator from "expo-image-manipulator"
 import { Button } from "@/components/ui/button"
@@ -31,21 +31,31 @@ export default function CropScreen() {
             try {
                 setIsProcessing(true)
 
+                // Get actual image dimensions first
+                const { width, height } = await new Promise<{
+                    width: number
+                    height: number
+                }>((resolve, reject) => {
+                    RNImage.getSize(
+                        originalImageUri,
+                        (w, h) => resolve({ width: w, height: h }),
+                        reject,
+                    )
+                })
+
+                const size = Math.min(width, height)
+                const cropX = (width - size) / 2
+                const cropY = (height - size) / 2
+
                 const result = await ImageManipulator.manipulateAsync(
                     originalImageUri,
                     [
                         {
                             crop: {
-                                originX: 0,
-                                originY: 0,
-                                width: Math.min(
-                                    Dimensions.get("window").width - 32,
-                                    Dimensions.get("window").width - 32,
-                                ),
-                                height: Math.min(
-                                    Dimensions.get("window").width - 32,
-                                    Dimensions.get("window").width - 32,
-                                ),
+                                originX: Math.round(cropX),
+                                originY: Math.round(cropY),
+                                width: size,
+                                height: size,
                             },
                         },
                     ],
