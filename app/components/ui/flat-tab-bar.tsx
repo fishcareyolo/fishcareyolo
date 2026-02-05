@@ -1,8 +1,9 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs"
 import { CameraIcon, HistoryIcon, SettingsIcon } from "lucide-react-native"
-import { Platform, Pressable, Text, View } from "react-native"
+import { Platform, Pressable, View } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Icon } from "@/components/ui/icon"
+import { Text } from "@/components/ui/text"
 import { cn } from "@/lib/utils"
 
 function TabItem({
@@ -31,24 +32,35 @@ function TabItem({
                 default: "tab",
             })}
             accessibilityState={focused ? { selected: true } : {}}
-            className={cn("flex-1 items-center justify-center", "min-h-11")}
+            className={cn("flex-1 items-center justify-center", "min-h-12")}
+            style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+            })}
         >
-            <View className="relative items-center justify-center px-2 py-2">
+            <View
+                className={cn(
+                    "relative items-center justify-center px-4 py-2 rounded-2xl transition-all duration-200",
+                    focused ? "bg-primary/10" : "",
+                )}
+            >
                 <Icon
                     as={IconCmp}
                     size={22}
                     className={cn(
-                        focused ? "text-foreground" : "text-muted-foreground",
+                        focused ? "text-primary" : "text-muted-foreground",
                     )}
                 />
                 <Text
                     className={cn(
-                        "mt-1 text-[11px] font-medium",
-                        focused ? "text-foreground" : "text-muted-foreground",
+                        "mt-1 text-[10px] font-semibold tracking-wide",
+                        focused ? "text-primary" : "text-muted-foreground",
                     )}
                 >
                     {label}
                 </Text>
+                {focused && (
+                    <View className="absolute bottom-0 w-8 h-1 rounded-full bg-primary" />
+                )}
             </View>
         </Pressable>
     )
@@ -61,7 +73,6 @@ export function FlatTabBar({
 }: BottomTabBarProps) {
     const insets = useSafeAreaInsets()
 
-    // Hide tab bar when on crop or preview screens
     const currentRoute = state.routes[state.index]?.name
     if (currentRoute === "crop" || currentRoute === "preview") {
         return null
@@ -69,7 +80,10 @@ export function FlatTabBar({
 
     return (
         <View
-            className={cn("border-t border-border bg-background", "flex-row")}
+            className={cn(
+                "border-t border-primary/10 bg-background/95 backdrop-blur-md",
+                "flex-row items-end justify-around pb-safe",
+            )}
             style={{ paddingBottom: Math.max(insets.bottom, 8) }}
         >
             {state.routes
@@ -83,7 +97,7 @@ export function FlatTabBar({
                     const order = ["history", "index", "settings"]
                     return order.indexOf(a.name) - order.indexOf(b.name)
                 })
-                .map((route, index) => {
+                .map((route) => {
                     const { options } = descriptors[route.key]
                     const label =
                         options.tabBarLabel !== undefined
