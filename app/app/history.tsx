@@ -24,7 +24,6 @@ export default function HistoryScreen() {
         try {
             setIsLoading(true)
             const items = await getHistoryItems()
-            // Sort by newest first
             const sorted = items.sort((a, b) => b.timestamp - a.timestamp)
             setHistoryItems(sorted)
         } catch (e) {
@@ -54,35 +53,46 @@ export default function HistoryScreen() {
         return { label, color, confidence: topDetection.confidence }
     }
 
-    const renderItem = ({ item }: { item: HistoryItem }) => {
+    const renderItem = ({
+        item,
+        index,
+    }: {
+        item: HistoryItem
+        index: number
+    }) => {
         const primary = getPrimaryDetection(item)
 
         return (
             <Pressable
-                className="flex-row items-center bg-card border border-border rounded-xl p-3 mb-3"
+                className="flex-row items-center bg-card rounded-2xl p-4 mb-3 border border-primary/10"
                 onPress={() =>
                     router.push({
                         pathname: "/results",
                         params: { historyId: item.id },
                     })
                 }
+                style={({ pressed }) => ({
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                })}
             >
                 <Image
                     source={{ uri: item.processedImageUri }}
-                    className="w-16 h-16 rounded-lg bg-muted"
+                    className="w-20 h-20 rounded-xl bg-secondary"
                     contentFit="cover"
-                    transition={200}
+                    transition={300}
                 />
-                <View className="flex-1 ml-3 justify-center">
-                    <View className="flex-row justify-between items-center mb-1">
-                        <Text
-                            className="font-semibold text-base"
-                            style={{ color: primary.color }}
-                        >
+                <View className="flex-1 ml-4 justify-center">
+                    <View className="flex-row items-center gap-2 mb-1">
+                        <View
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: primary.color }}
+                        />
+                        <Text className="font-semibold text-lg text-foreground">
                             {primary.label}
                         </Text>
                         {primary.confidence && (
-                            <Text className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            <Text className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full ml-auto">
                                 {(primary.confidence * 100).toFixed(0)}%
                             </Text>
                         )}
@@ -101,34 +111,42 @@ export default function HistoryScreen() {
                 <Icon
                     as={ChevronRightIcon}
                     size={20}
-                    className="text-muted-foreground ml-2"
+                    className="text-primary/50 ml-2"
                 />
             </Pressable>
         )
     }
 
     return (
-        <View className="flex-1 bg-background px-5 pt-10">
-            <Text className="text-2xl font-semibold text-foreground text-center py-5">
-                History
-            </Text>
+        <View className="flex-1 bg-background">
+            <View className="pt-12 pb-6 px-6 aquatic-gradient border-b border-primary/10">
+                <Text className="text-3xl font-bold text-foreground">
+                    History
+                </Text>
+                <Text className="text-muted-foreground mt-1">
+                    Your recent scans
+                </Text>
+            </View>
 
             {isLoading ? (
                 <View className="flex-1 items-center justify-center">
-                    <ActivityIndicator size="large" />
+                    <View className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
                 </View>
             ) : historyItems.length === 0 ? (
-                <View className="mt-8 items-center justify-center rounded-2xl border border-border bg-muted/30 p-8">
-                    <Icon
-                        as={ClockIcon}
-                        size={28}
-                        className="text-muted-foreground"
-                    />
-                    <Text className="mt-3 text-base font-medium text-foreground">
+                <View className="flex-1 items-center justify-center px-8">
+                    <View className="w-24 h-24 rounded-full bg-secondary items-center justify-center mb-6">
+                        <Icon
+                            as={ClockIcon}
+                            size={40}
+                            className="text-primary/40"
+                        />
+                    </View>
+                    <Text className="text-xl font-semibold text-foreground text-center">
                         No scans yet
                     </Text>
-                    <Text className="mt-1 text-center text-sm text-muted-foreground">
-                        Your recent detections will show up here.
+                    <Text className="text-center text-muted-foreground mt-2">
+                        Capture your first fish to start tracking health over
+                        time.
                     </Text>
                 </View>
             ) : (
@@ -137,7 +155,9 @@ export default function HistoryScreen() {
                     renderItem={renderItem}
                     keyExtractor={(item) => item.id}
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 20 }}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    initialNumToRender={5}
+                    maxToRenderPerBatch={10}
                 />
             )}
         </View>
