@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy"
 import { storage } from "@/lib/storage"
 import type { HistoryItem } from "./types"
 import { createComponentLogger } from "@/lib/log"
+import { generateUUID } from "@/lib/utils/uuid"
 
 const logger = createComponentLogger("history/storage")
 
@@ -36,7 +37,7 @@ export async function saveHistoryItem(
     try {
         await ensureHistoryDirectory()
 
-        const id = crypto.randomUUID()
+        const id = generateUUID()
         const itemDir = `${HISTORY_DIR}${id}/`
 
         await FileSystem.makeDirectoryAsync(itemDir, { intermediates: true })
