@@ -74,7 +74,7 @@ function NativeIndicator({ value, className }: IndicatorProps) {
                 { overshootClamping: true },
             ),
         }
-    }, [value])
+    })
 
     if (Platform.OS === "web") {
         return null
