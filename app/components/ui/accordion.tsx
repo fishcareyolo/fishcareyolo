@@ -80,12 +80,9 @@ function AccordionTrigger({
                 : withTiming(0, { duration: 200 }),
         [isExpanded],
     )
-    const chevronStyle = useAnimatedStyle(
-        () => ({
-            transform: [{ rotate: `${progress.value * 180}deg` }],
-        }),
-        [progress],
-    )
+    const chevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${progress.value * 180}deg` }],
+    }))
 
     return (
         <TextClassContext.Provider
