@@ -34,10 +34,14 @@ def export_tflite(
     Raises:
         FileNotFoundError: If weights file not found
     """
+    from mina.train import get_data_yaml_path
+
     weights_path = Path(weights_path)
 
     if not weights_path.exists():
         raise FileNotFoundError(f"Weights file not found: {weights_path}")
+
+    data_yaml = get_data_yaml_path()
 
     print(f"Loading model from: {weights_path}")
     model = YOLO(str(weights_path))
@@ -49,6 +53,7 @@ def export_tflite(
     # used in YOLO NMS. NMS should be handled in the mobile app instead.
     export_path = model.export(
         format="tflite",
+        data=str(data_yaml),
         int8=int8,
         imgsz=imgsz,
         simplify=True,
