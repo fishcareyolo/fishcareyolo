@@ -75,3 +75,5 @@ bun commit-agent test "add inference model property tests" "Added hypothesis tes
 # Documentation update
 bun commit-agent docs "update spec with new API endpoints" "Added REST API documentation to spec/design.md for external model serving"
 ```
+
+DO NOT ADD NEW MARKDOWN FILES TO THE GIT HISTORY, ALWAYS MAKE SURE TO DELETE ANY TEMPORARY MARKDOWN FILES OR PLANS BEFORE USING COMMIT-AGENT
